@@ -107,8 +107,8 @@ function getTokenInfo(accessToken: string) {
   try {
     const { payload } = jwtDecode(accessToken) as any
 
-    const slug = payload?.organization?.slug
-    const kind = payload?.application?.kind // "sales_channel" OR "integration"
+    const slug = payload?.organization?.slug as string | undefined
+    const kind = payload?.application?.kind as string | undefined // must be "sales_channel"
     const test = payload?.test
     const owner = payload?.owner
 
@@ -129,13 +129,12 @@ function getTokenInfo(accessToken: string) {
 export const getSettings = async ({
   accessToken,
   orderId,
-  subdomain,
   paymentReturn,
 }: {
   accessToken: string
   orderId: string
   paymentReturn?: boolean
-  subdomain: string
+  subdomain: string // kept for signature compatibility, but not used
 }) => {
   const domain = process.env.NEXT_PUBLIC_DOMAIN || "commercelayer.io"
 
@@ -153,11 +152,8 @@ export const getSettings = async ({
   if (!slug || !kind) return invalidateCheckout()
 
   /**
-   * ✅ IMPORTANT SECURITY CHECK (production)
-   * Because your checkout is on a custom domain, hostname/subdomain isn't reliable.
-   * So in prod, ensure the token belongs to the org you expect.
-   *
-   * Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in the checkout app env.
+   * ✅ Production safety: make sure token belongs to the org you expect.
+   * Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in the CHECKOUT app env (Vercel).
    */
   const expectedSlug = (process.env.NEXT_PUBLIC_CL_SLUG || "").trim()
   if (isProduction() && expectedSlug && slug !== expectedSlug) {
@@ -165,12 +161,10 @@ export const getSettings = async ({
   }
 
   /**
-   * ✅ ACCEPT BOTH:
-   * - sales_channel tokens (normal CL checkout flow)
-   * - integration tokens (your current workaround to make orders accessible)
+   * ✅ OPTION A: Checkout MFE must run with a SALES CHANNEL token.
+   * Integration tokens are NOT allowed here (that’s exactly what caused your 404).
    */
-  const allowedKinds = new Set(["sales_channel", "integration"])
-  if (!allowedKinds.has(String(kind))) {
+  if (kind !== "sales_channel") {
     return invalidateCheckout()
   }
 
@@ -197,7 +191,7 @@ export const getSettings = async ({
     return invalidateCheckout(!orderResource?.bailed)
   }
 
-  // ✅ market id from ORDER (works even with market:all / integration)
+  // ✅ IMPORTANT: market id comes from the ORDER (works with market:all sales channel tokens)
   const orderMarketId = (order as any)?.market?.id as string | undefined
 
   const lineItemsShoppable = order.line_items?.filter((line_item) =>
@@ -230,19 +224,12 @@ export const getSettings = async ({
         console.log("error refreshing order")
       }
     }
-  } else if (order.status !== "placed") {
-    /**
-     * Ownership check:
-     * - if token is sales_channel guest: ok (guest)
-     * - if token is customer owned: must match customer
-     * - if token is integration: no owner; skip this restriction
-     */
-    if (
-      kind === "sales_channel" &&
-      (isGuest || owner?.id !== order.customer?.id)
-    ) {
-      return invalidateCheckout()
-    }
+  } else if (
+    order.status !== "placed" &&
+    // Invalid if status not placed with guest token OR if owned order doesn't match the token owner
+    (isGuest || owner?.id !== order.customer?.id)
+  ) {
+    return invalidateCheckout()
   }
 
   const appSettings: CheckoutSettings = {
