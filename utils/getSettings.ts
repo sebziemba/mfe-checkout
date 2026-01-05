@@ -1,3 +1,4 @@
+// utils/getSettings.ts
 import { jwtDecode } from "@commercelayer/js-auth"
 import { getMfeConfig } from "@commercelayer/organization-config"
 import CommerceLayer, {
@@ -36,7 +37,7 @@ async function retryCall<T>(
         return { object: object as unknown as T, success: true }
       } catch (e: unknown) {
         if (CommerceLayerStatic.isApiError(e) && e.status === 401) {
-          console.log("[getSettings] Not authorized")
+          console.log("[getSettings] Not authorized (401)")
           return { object: undefined, success: false, bailed: true }
         }
         if (number === RETRIES + 1) {
@@ -109,13 +110,13 @@ function getTokenInfo(accessToken: string) {
 
     const slug = payload?.organization?.slug
     const kind = payload?.application?.kind // "sales_channel" OR "integration"
-    const isTest = !!payload?.test
+    const test = payload?.test
     const owner = payload?.owner
 
     return {
       slug,
       kind,
-      isTest,
+      isTest: !!test,
       owner,
       isGuest: !owner,
       scope: payload?.scope,
@@ -129,7 +130,7 @@ function getTokenInfo(accessToken: string) {
 export const getSettings = async ({
   accessToken,
   orderId,
-  subdomain, // not used with custom domain, but keep signature
+  subdomain, // unused with custom domain, kept for signature compatibility
   paymentReturn,
 }: {
   accessToken: string
@@ -139,30 +140,39 @@ export const getSettings = async ({
 }) => {
   const domain = process.env.NEXT_PUBLIC_DOMAIN || "commercelayer.io"
 
-  function invalidateCheckout(retry?: boolean): InvalidCheckoutSettings {
+  function invalidateCheckout(
+    reason: string,
+    retry?: boolean,
+  ): InvalidCheckoutSettings {
+    console.log("[getSettings] INVALID CHECKOUT:", reason)
     return {
       validCheckout: false,
       retryOnError: !!retry,
     } as InvalidCheckoutSettings
   }
 
-  if (!accessToken || !orderId) return invalidateCheckout()
+  if (!accessToken || !orderId)
+    return invalidateCheckout("missing_accessToken_or_orderId")
 
   const { slug, kind, isTest, isGuest, owner } = getTokenInfo(accessToken)
 
-  if (!slug || !kind) return invalidateCheckout()
+  if (!slug || !kind) return invalidateCheckout("token_missing_slug_or_kind")
 
-  // ✅ Optional: protect prod from random org tokens
+  /**
+   * ✅ Production org safety check (recommended)
+   * Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in checkout app env (optional)
+   */
   const expectedSlug = (process.env.NEXT_PUBLIC_CL_SLUG || "").trim()
   if (isProduction() && expectedSlug && slug !== expectedSlug) {
-    console.log("[getSettings] invalid slug", { slug, expectedSlug })
-    return invalidateCheckout()
+    return invalidateCheckout("token_slug_mismatch")
   }
 
-  // ✅ Accept BOTH
-  if (kind !== "sales_channel" && kind !== "integration") {
-    console.log("[getSettings] invalid token kind", { kind })
-    return invalidateCheckout()
+  /**
+   * ✅ Checkout app should run on SALES CHANNEL token.
+   * We bootstrap it via /api/guest-token, so enforce it here.
+   */
+  if (String(kind) !== "sales_channel") {
+    return invalidateCheckout(`token_kind_not_sales_channel (${String(kind)})`)
   }
 
   const cl = CommerceLayer({
@@ -178,14 +188,15 @@ export const getSettings = async ({
 
   const organization = organizationResource?.object
   if (!organizationResource?.success || !organization?.id) {
-    console.log("[getSettings] Invalid: organization")
-    return invalidateCheckout(!organizationResource?.bailed)
+    return invalidateCheckout(
+      "organization_not_accessible",
+      !organizationResource?.bailed,
+    )
   }
 
   const order = orderResource?.object
   if (!orderResource?.success || !order?.id) {
-    console.log("[getSettings] Invalid: order")
-    return invalidateCheckout(!orderResource?.bailed)
+    return invalidateCheckout("order_not_accessible", !orderResource?.bailed)
   }
 
   const orderMarketId = (order as any)?.market?.id as string | undefined
@@ -195,8 +206,7 @@ export const getSettings = async ({
   )
 
   if ((lineItemsShoppable || []).length === 0) {
-    console.log("[getSettings] Invalid: No shoppable line items")
-    return invalidateCheckout()
+    return invalidateCheckout("no_shoppable_line_items")
   }
 
   const isShipmentRequired = (order.line_items || []).some(
@@ -215,17 +225,18 @@ export const getSettings = async ({
           payment_method: cl.payment_methods.relationship(null),
           ...(!order.autorefresh && { autorefresh: true }),
         })
-      } catch {
-        console.log("[getSettings] error refreshing order")
+      } catch (e) {
+        console.log("[getSettings] error refreshing order", e)
       }
     }
   } else if (order.status !== "placed") {
-    // ✅ Apply ownership restriction ONLY for sales_channel
-    if (
-      kind === "sales_channel" &&
-      (isGuest || owner?.id !== order.customer?.id)
-    ) {
-      return invalidateCheckout()
+    /**
+     * Ownership check for sales_channel tokens:
+     * - guest token: allow
+     * - owner token: must match order customer
+     */
+    if (!isGuest && owner?.id && owner.id !== order.customer?.id) {
+      return invalidateCheckout("owner_mismatch")
     }
   }
 
