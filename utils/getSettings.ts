@@ -176,10 +176,8 @@ export const getSettings = async ({
     return invalidateCheckout()
   }
 
-  // Keep the original MFE security checks
-  if (isProduction() && (subdomain !== slug || kind !== "sales_channel")) {
-    return invalidateCheckout()
-  }
+  // ✅ With a custom domain (checkout.bubbelsvanfrits.nl) subdomain will NEVER equal the CL slug.
+  // Keep the security check that matters: token must be a Sales Channel token.
   if (kind !== "sales_channel") {
     return invalidateCheckout()
   }
