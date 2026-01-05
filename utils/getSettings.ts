@@ -36,10 +36,11 @@ async function retryCall<T>(
         return { object: object as unknown as T, success: true }
       } catch (e: unknown) {
         if (CommerceLayerStatic.isApiError(e) && e.status === 401) {
-          console.log("Not authorized")
+          console.log("[checkout/getSettings] Not authorized (401)")
           return { object: undefined, success: false, bailed: true }
         }
         if (number === RETRIES + 1) {
+          console.log("[checkout/getSettings] Retries exhausted")
           return { object: undefined, success: false, bailed: false }
         }
         throw e
@@ -108,20 +109,23 @@ function getTokenInfo(accessToken: string) {
     const { payload } = jwtDecode(accessToken) as any
 
     const slug = payload?.organization?.slug as string | undefined
-    const kind = payload?.application?.kind as string | undefined // must be "sales_channel"
-    const test = payload?.test
+    const kind = payload?.application?.kind as string | undefined // sales_channel | integration
+    const test = !!payload?.test
     const owner = payload?.owner
+    const scope = payload?.scope
 
     return {
       slug,
       kind,
-      isTest: !!test,
+      isTest: test,
       owner,
       isGuest: !owner,
-      scope: payload?.scope,
+      scope,
     }
   } catch (e) {
-    console.log(`error decoding access token: ${e}`)
+    console.log(
+      `[checkout/getSettings] error decoding access token: ${String(e)}`,
+    )
     return {}
   }
 }
@@ -129,43 +133,57 @@ function getTokenInfo(accessToken: string) {
 export const getSettings = async ({
   accessToken,
   orderId,
+  subdomain, // kept for signature compatibility
   paymentReturn,
 }: {
   accessToken: string
   orderId: string
   paymentReturn?: boolean
-  subdomain: string // kept for signature compatibility, but not used
+  subdomain: string
 }) => {
   const domain = process.env.NEXT_PUBLIC_DOMAIN || "commercelayer.io"
 
-  function invalidateCheckout(retry?: boolean): InvalidCheckoutSettings {
+  function invalidateCheckout(
+    reason: string,
+    retry?: boolean,
+  ): InvalidCheckoutSettings {
+    console.log("[checkout/getSettings] INVALID", {
+      reason,
+      retryOnError: !!retry,
+    })
     return {
       validCheckout: false,
       retryOnError: !!retry,
     } as InvalidCheckoutSettings
   }
 
-  if (!accessToken || !orderId) return invalidateCheckout()
+  if (!accessToken || !orderId)
+    return invalidateCheckout("missing accessToken or orderId")
 
-  const { slug, kind, isTest, isGuest, owner } = getTokenInfo(accessToken)
+  const { slug, kind, isTest, isGuest, owner, scope } =
+    getTokenInfo(accessToken)
 
-  if (!slug || !kind) return invalidateCheckout()
+  console.log("[checkout/getSettings] token info", {
+    slug,
+    kind,
+    isTest,
+    isGuest,
+    scope,
+    orderId,
+  })
 
-  /**
-   * ✅ Production safety: make sure token belongs to the org you expect.
-   * Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in the CHECKOUT app env (Vercel).
-   */
+  if (!slug || !kind) return invalidateCheckout("token missing slug/kind")
+
+  // ✅ Security check for custom domain: lock slug in PROD (optional but recommended)
+  // Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in checkout app env
   const expectedSlug = (process.env.NEXT_PUBLIC_CL_SLUG || "").trim()
   if (isProduction() && expectedSlug && slug !== expectedSlug) {
-    return invalidateCheckout()
+    return invalidateCheckout("slug mismatch in production")
   }
 
-  /**
-   * ✅ OPTION A: Checkout MFE must run with a SALES CHANNEL token.
-   * Integration tokens are NOT allowed here (that’s exactly what caused your 404).
-   */
-  if (kind !== "sales_channel") {
-    return invalidateCheckout()
+  // ✅ Allow both token kinds (your current flow passes integration token)
+  if (kind !== "sales_channel" && kind !== "integration") {
+    return invalidateCheckout(`unsupported token kind: ${String(kind)}`)
   }
 
   const cl = CommerceLayer({
@@ -181,37 +199,42 @@ export const getSettings = async ({
 
   const organization = organizationResource?.object
   if (!organizationResource?.success || !organization?.id) {
-    console.log("Invalid: organization")
-    return invalidateCheckout(!organizationResource?.bailed)
+    return invalidateCheckout(
+      "organization retrieve failed",
+      !organizationResource?.bailed,
+    )
   }
 
   const order = orderResource?.object
   if (!orderResource?.success || !order?.id) {
-    console.log("Invalid: order")
-    return invalidateCheckout(!orderResource?.bailed)
+    return invalidateCheckout("order retrieve failed", !orderResource?.bailed)
   }
 
-  // ✅ IMPORTANT: market id comes from the ORDER (works with market:all sales channel tokens)
+  // ✅ market id from the ORDER (works with market:all + integration)
   const orderMarketId = (order as any)?.market?.id as string | undefined
+  console.log("[checkout/getSettings] order ok", {
+    orderId: order.id,
+    status: order.status,
+    orderMarketId,
+  })
 
-  const lineItemsShoppable = order.line_items?.filter((line_item) =>
-    LINE_ITEMS_SHOPPABLE.includes(line_item.item_type as TypeAccepted),
+  const lineItemsShoppable = order.line_items?.filter((li) =>
+    LINE_ITEMS_SHOPPABLE.includes(li.item_type as TypeAccepted),
   )
 
   if ((lineItemsShoppable || []).length === 0) {
-    console.log("Invalid: No shoppable line items")
-    return invalidateCheckout()
+    return invalidateCheckout("no shoppable line items")
   }
 
   const isShipmentRequired = (order.line_items || []).some(
-    (line_item) =>
-      LINE_ITEMS_SHIPPABLE.includes(line_item.item_type as TypeAccepted) &&
+    (li) =>
+      LINE_ITEMS_SHIPPABLE.includes(li.item_type as TypeAccepted) &&
       // @ts-expect-error
-      !line_item.item?.do_not_ship,
+      !li.item?.do_not_ship,
   )
 
+  // Refresh logic (same as upstream)
   if (order.status === "draft" || order.status === "pending") {
-    // https://github.com/commercelayer/mfe-checkout/issues/356
     if (!paymentReturn && (!order.autorefresh || (!isGuest && order.guest))) {
       try {
         await cl.orders.update({
@@ -220,16 +243,19 @@ export const getSettings = async ({
           payment_method: cl.payment_methods.relationship(null),
           ...(!order.autorefresh && { autorefresh: true }),
         })
-      } catch {
-        console.log("error refreshing order")
+      } catch (e) {
+        console.log("[checkout/getSettings] error refreshing order", e)
       }
     }
-  } else if (
-    order.status !== "placed" &&
-    // Invalid if status not placed with guest token OR if owned order doesn't match the token owner
-    (isGuest || owner?.id !== order.customer?.id)
-  ) {
-    return invalidateCheckout()
+  } else if (order.status !== "placed") {
+    // Ownership check only makes sense for sales_channel customer/guest tokens.
+    // Integration tokens have no owner → do not block.
+    if (
+      kind === "sales_channel" &&
+      (isGuest || owner?.id !== order.customer?.id)
+    ) {
+      return invalidateCheckout("sales_channel ownership check failed")
+    }
   }
 
   const appSettings: CheckoutSettings = {
