@@ -40,7 +40,6 @@ async function retryCall<T>(
       } catch (e: unknown) {
         if (CommerceLayerStatic.isApiError(e) && e.status === 401) {
           console.log("Not authorized")
-
           return {
             object: undefined,
             success: false,
@@ -57,9 +56,7 @@ async function retryCall<T>(
         throw e
       }
     },
-    {
-      retries: RETRIES,
-    },
+    { retries: RETRIES },
   )
 }
 
@@ -95,6 +92,7 @@ function getOrder(
       fields: {
         orders: [
           "id",
+          "market", // ✅ needed so we can use order.market.id with market:all tokens
           "autorefresh",
           "status",
           "number",
@@ -111,7 +109,7 @@ function getOrder(
         ],
         line_items: ["item_type", "item"],
       },
-      include: ["line_items", "line_items.item", "customer"],
+      include: ["market", "line_items", "line_items.item", "customer"],
     }),
   )
 }
@@ -127,13 +125,14 @@ function getTokenInfo(accessToken: string) {
         owner,
         test,
       } = payload
+
       return {
         slug,
         kind,
         isTest: test,
         isGuest: !owner,
         owner,
-        marketId: payload.market?.id[0],
+        // NOTE: do NOT rely on payload.market when using scope=market:all
       }
     }
     return {}
@@ -171,13 +170,13 @@ export const getSettings = async ({
     return invalidateCheckout()
   }
 
-  const { slug, kind, isTest, isGuest, owner, marketId } =
-    getTokenInfo(accessToken)
+  const { slug, kind, isTest, isGuest, owner } = getTokenInfo(accessToken)
 
   if (!slug) {
     return invalidateCheckout()
   }
 
+  // Keep the original MFE security checks
   if (isProduction() && (subdomain !== slug || kind !== "sales_channel")) {
     return invalidateCheckout()
   }
@@ -197,24 +196,24 @@ export const getSettings = async ({
   ])
 
   const organization = organizationResource?.object
-
   if (!organizationResource?.success || !organization?.id) {
     console.log("Invalid: organization")
     return invalidateCheckout(!organizationResource?.bailed)
   }
 
   const order = orderResource?.object
-
   if (!orderResource?.success || !order?.id) {
     console.log("Invalid: order")
     return invalidateCheckout(!orderResource?.bailed)
   }
 
+  // ✅ IMPORTANT: market id comes from the ORDER (works with market:all tokens)
+  const orderMarketId = (order as any)?.market?.id as string | undefined
+
   const lineItemsShoppable = order.line_items?.filter((line_item) => {
     return LINE_ITEMS_SHOPPABLE.includes(line_item.item_type as TypeAccepted)
   })
 
-  // If there are no shoppable items we redirect to the invalid page
   if ((lineItemsShoppable || []).length === 0) {
     console.log("Invalid: No shoppable line items")
     return invalidateCheckout()
@@ -228,7 +227,7 @@ export const getSettings = async ({
   )
 
   if (order.status === "draft" || order.status === "pending") {
-    // Logic to refresh the order is documented here: https://github.com/commercelayer/mfe-checkout/issues/356
+    // https://github.com/commercelayer/mfe-checkout/issues/356
     if (!paymentReturn && (!order.autorefresh || (!isGuest && order.guest))) {
       try {
         await cl.orders.update({
@@ -243,8 +242,6 @@ export const getSettings = async ({
     }
   } else if (
     order.status !== "placed" &&
-    // Invalid if status not placed with guest token or if the order is not owned by the customer
-    // Latest check is done by the API, but just to reinforce it here
     (isGuest || owner?.id !== order.customer?.id)
   ) {
     return invalidateCheckout()
@@ -256,12 +253,14 @@ export const getSettings = async ({
     isGuest: !!isGuest,
     domain,
     slug,
+
     orderNumber: order.number || "",
     orderId: order.id,
     expiresAt: order.expires_at,
     expirationInfo: order.expiration_info,
     isShipmentRequired,
     validCheckout: true,
+
     logoUrl: organization.logo_url,
     companyName: organization.name || "Test company",
     language: order.language_code || "en",
@@ -274,14 +273,16 @@ export const getSettings = async ({
     supportPhone: organization.support_phone,
     termsUrl: order.terms_url,
     privacyUrl: order.privacy_url,
+
     config: getMfeConfig({
       jsonConfig: organization.config ?? {},
-      market: `market:id:${marketId}`,
+      // ✅ this is the key part that fixes market:all tokens:
+      market: orderMarketId ? `market:id:${orderMarketId}` : undefined,
       params: {
         lang: order.language_code,
         orderId: order.id,
         token: order.token,
-        slug: slug,
+        slug,
         accessToken,
       },
     }),
