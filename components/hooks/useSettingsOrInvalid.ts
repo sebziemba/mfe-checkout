@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { getSettings } from "utils/getSettings"
 import { getSubdomain } from "utils/getSubdomain"
-
 import { useLocalStorageToken } from "./useLocalStorageToken"
 
 interface UseSettingsOrInvalid {
@@ -11,43 +10,18 @@ interface UseSettingsOrInvalid {
   isLoading: boolean
 }
 
-type SessionGetOk = { ok: true; accessToken: string }
-type SessionGetErr = { ok: false; error?: string }
-type SessionGetRes = SessionGetOk | SessionGetErr
-
-async function fetchAccessTokenBySid(sid: string): Promise<string> {
-  if (!sid) return ""
-  try {
-    const r = await fetch(
-      `/api/checkout/session-get?sid=${encodeURIComponent(sid)}`,
-      { cache: "no-store" },
-    )
-    const j = (await r.json().catch(() => null)) as SessionGetRes | null
-    if (j && j.ok && typeof j.accessToken === "string" && j.accessToken) {
-      return j.accessToken
-    }
-    return ""
-  } catch {
-    return ""
-  }
-}
-
 export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   const navigate = useNavigate()
   const { orderId } = useParams()
   const [searchParams] = useSearchParams()
 
-  // ✅ Option A: sid in URL, token NOT in URL
-  const sid = searchParams.get("sid")
-
-  // Still support accessToken in URL (optional fallback for debugging)
   const accessTokenFromUrl = searchParams.get("accessToken")
-
   const paymentReturn = searchParams.get("paymentReturn")
   const redirectResult = searchParams.get("redirectResult")
-  const paymentIntentClientSecret = searchParams.get(
-    "payment_intent_client_secret",
-  )
+  const paymentIntentClientSecret = searchParams.get("payment_intent_client_secret")
+
+  const isPaymentReturn =
+    paymentReturn === "true" || !!redirectResult || !!paymentIntentClientSecret
 
   const [settings, setSettings] = useState<
     CheckoutSettings | InvalidCheckoutSettings | undefined
@@ -55,109 +29,75 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
 
   const [isFetching, setIsFetching] = useState(true)
 
-  // ✅ Local storage token
   const [savedAccessToken, setAccessToken] = useLocalStorageToken(
     "checkoutAccessToken",
-    (accessTokenFromUrl as string) || "",
+    (accessTokenFromUrl || "") as string,
   )
 
-  const isPaymentReturn =
-    paymentReturn === "true" || !!redirectResult || !!paymentIntentClientSecret
+  // Prevent double-calling /api/guest-token due to rerenders
+  const guestFetchStartedRef = useRef(false)
 
-  // ✅ Decide which token we currently “want”:
-  // - if URL provides accessToken, prefer it
-  // - else use saved token (after we fetch it via sid)
-  const effectiveAccessToken = useMemo(() => {
-    return accessTokenFromUrl || savedAccessToken || ""
-  }, [accessTokenFromUrl, savedAccessToken])
-
-  // ✅ If accessToken is in URL and differs from saved, sync it
+  // 1) If token is in URL, persist it
   useEffect(() => {
     if (accessTokenFromUrl && accessTokenFromUrl !== savedAccessToken) {
       setAccessToken(accessTokenFromUrl)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessTokenFromUrl])
+  }, [accessTokenFromUrl, savedAccessToken, setAccessToken])
 
-  // ✅ If there is NO token in URL, but we have sid, fetch token server-side
+  // 2) If no token anywhere, fetch guest token from server once
   useEffect(() => {
-    let cancelled = false
+    const ensureToken = async () => {
+      if (savedAccessToken) return
+      if (guestFetchStartedRef.current) return
+      guestFetchStartedRef.current = true
 
-    async function run() {
-      // If we already have a token, no need to fetch
-      if (accessTokenFromUrl || savedAccessToken) return
+      try {
+        const r = await fetch("/api/guest-token", { method: "POST" })
+        const j = await r.json().catch(() => null)
 
-      // Need sid to fetch
-      if (!sid) return
+        if (!j?.ok || !j?.accessToken) throw new Error("guest token failed")
 
-      const token = await fetchAccessTokenBySid(sid)
-      if (!cancelled && token) {
-        setAccessToken(token)
+        setAccessToken(j.accessToken)
+      } catch {
+        navigate("/404")
       }
     }
 
-    run()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sid])
+    ensureToken()
+  }, [savedAccessToken, navigate, setAccessToken])
 
-  // ✅ Fetch settings when we have a token + orderId
+  // 3) Load settings once token + orderId exist
   useEffect(() => {
-    let cancelled = false
-
-    async function run() {
-      const oid = (orderId as string) || ""
-      if (!oid) return
-
-      if (!effectiveAccessToken) return
+    const run = async () => {
+      if (!savedAccessToken || !orderId) return
 
       setIsFetching(true)
 
       const fetchedSettings = await getSettings({
-        accessToken: effectiveAccessToken,
-        orderId: oid,
+        accessToken: savedAccessToken,
+        orderId: orderId as string,
         paymentReturn: isPaymentReturn,
         subdomain: getSubdomain(window.location.hostname),
       })
 
-      if (!cancelled) {
-        setSettings(fetchedSettings)
-        setIsFetching(false)
+      setSettings(fetchedSettings)
+      setIsFetching(false)
+
+      // If invalid and not retryable, redirect here (avoid navigation during render)
+      if (fetchedSettings && !fetchedSettings.validCheckout && !fetchedSettings.retryOnError) {
+        navigate("/404")
       }
     }
 
     run()
-    return () => {
-      cancelled = true
-    }
-  }, [effectiveAccessToken, orderId, isPaymentReturn])
+  }, [savedAccessToken, orderId, isPaymentReturn, navigate])
 
-  /**
-   * ✅ New validity rule:
-   * - For normal checkout (not payment return), user must have EITHER:
-   *   - sid in URL (preferred)
-   *   - OR a saved token (in case they refreshed / came back)
-   */
-  if (!isPaymentReturn && !sid && !savedAccessToken && !accessTokenFromUrl) {
-    navigate("/404")
-    return { settings: undefined, isLoading: false }
-  }
-
-  if (isFetching) {
-    return { isLoading: true, settings: undefined }
-  }
+  if (isFetching) return { isLoading: true, settings: undefined }
 
   if (settings && !settings.validCheckout) {
-    if (!settings.retryOnError) {
-      navigate("/404")
-    }
+    // no navigate here; we already handled it in the effect
     return { settings: undefined, retryOnError: true, isLoading: false }
   }
 
-  return {
-    settings: settings as CheckoutSettings | undefined,
-    isLoading: false,
-  }
+  return { settings: settings as CheckoutSettings | undefined, isLoading: false }
 }
