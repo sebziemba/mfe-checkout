@@ -1,4 +1,4 @@
-import { jwtDecode, jwtIsSalesChannel } from "@commercelayer/js-auth"
+import { jwtDecode } from "@commercelayer/js-auth"
 import { getMfeConfig } from "@commercelayer/organization-config"
 import CommerceLayer, {
   type CommerceLayerClient,
@@ -33,25 +33,14 @@ async function retryCall<T>(
     async (_bail, number) => {
       try {
         const object = await f()
-        return {
-          object: object as unknown as T,
-          success: true,
-        }
+        return { object: object as unknown as T, success: true }
       } catch (e: unknown) {
         if (CommerceLayerStatic.isApiError(e) && e.status === 401) {
           console.log("Not authorized")
-          return {
-            object: undefined,
-            success: false,
-            bailed: true,
-          }
+          return { object: undefined, success: false, bailed: true }
         }
         if (number === RETRIES + 1) {
-          return {
-            object: undefined,
-            success: false,
-            bailed: false,
-          }
+          return { object: undefined, success: false, bailed: false }
         }
         throw e
       }
@@ -92,7 +81,7 @@ function getOrder(
       fields: {
         orders: [
           "id",
-          "market", // ✅ needed so we can use order.market.id with market:all tokens
+          "market",
           "autorefresh",
           "status",
           "number",
@@ -116,26 +105,21 @@ function getOrder(
 
 function getTokenInfo(accessToken: string) {
   try {
-    const { payload } = jwtDecode(accessToken)
+    const { payload } = jwtDecode(accessToken) as any
 
-    if (jwtIsSalesChannel(payload)) {
-      const {
-        organization: { slug },
-        application: { kind },
-        owner,
-        test,
-      } = payload
+    const slug = payload?.organization?.slug
+    const kind = payload?.application?.kind // "sales_channel" OR "integration"
+    const test = payload?.test
+    const owner = payload?.owner
 
-      return {
-        slug,
-        kind,
-        isTest: test,
-        isGuest: !owner,
-        owner,
-        // NOTE: do NOT rely on payload.market when using scope=market:all
-      }
+    return {
+      slug,
+      kind,
+      isTest: !!test,
+      owner,
+      isGuest: !owner,
+      scope: payload?.scope,
     }
-    return {}
   } catch (e) {
     console.log(`error decoding access token: ${e}`)
     return {}
@@ -156,29 +140,37 @@ export const getSettings = async ({
   const domain = process.env.NEXT_PUBLIC_DOMAIN || "commercelayer.io"
 
   function invalidateCheckout(retry?: boolean): InvalidCheckoutSettings {
-    console.log("access token:")
-    console.log(accessToken)
-    console.log("orderId")
-    console.log(orderId)
     return {
       validCheckout: false,
       retryOnError: !!retry,
     } as InvalidCheckoutSettings
   }
 
-  if (!accessToken || !orderId) {
-    return invalidateCheckout()
-  }
+  if (!accessToken || !orderId) return invalidateCheckout()
 
   const { slug, kind, isTest, isGuest, owner } = getTokenInfo(accessToken)
 
-  if (!slug) {
+  if (!slug || !kind) return invalidateCheckout()
+
+  /**
+   * ✅ IMPORTANT SECURITY CHECK (production)
+   * Because your checkout is on a custom domain, hostname/subdomain isn't reliable.
+   * So in prod, ensure the token belongs to the org you expect.
+   *
+   * Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in the checkout app env.
+   */
+  const expectedSlug = (process.env.NEXT_PUBLIC_CL_SLUG || "").trim()
+  if (isProduction() && expectedSlug && slug !== expectedSlug) {
     return invalidateCheckout()
   }
 
-  // ✅ With a custom domain (checkout.bubbelsvanfrits.nl) subdomain will NEVER equal the CL slug.
-  // Keep the security check that matters: token must be a Sales Channel token.
-  if (kind !== "sales_channel") {
+  /**
+   * ✅ ACCEPT BOTH:
+   * - sales_channel tokens (normal CL checkout flow)
+   * - integration tokens (your current workaround to make orders accessible)
+   */
+  const allowedKinds = new Set(["sales_channel", "integration"])
+  if (!allowedKinds.has(String(kind))) {
     return invalidateCheckout()
   }
 
@@ -205,12 +197,12 @@ export const getSettings = async ({
     return invalidateCheckout(!orderResource?.bailed)
   }
 
-  // ✅ IMPORTANT: market id comes from the ORDER (works with market:all tokens)
+  // ✅ market id from ORDER (works even with market:all / integration)
   const orderMarketId = (order as any)?.market?.id as string | undefined
 
-  const lineItemsShoppable = order.line_items?.filter((line_item) => {
-    return LINE_ITEMS_SHOPPABLE.includes(line_item.item_type as TypeAccepted)
-  })
+  const lineItemsShoppable = order.line_items?.filter((line_item) =>
+    LINE_ITEMS_SHOPPABLE.includes(line_item.item_type as TypeAccepted),
+  )
 
   if ((lineItemsShoppable || []).length === 0) {
     console.log("Invalid: No shoppable line items")
@@ -238,11 +230,19 @@ export const getSettings = async ({
         console.log("error refreshing order")
       }
     }
-  } else if (
-    order.status !== "placed" &&
-    (isGuest || owner?.id !== order.customer?.id)
-  ) {
-    return invalidateCheckout()
+  } else if (order.status !== "placed") {
+    /**
+     * Ownership check:
+     * - if token is sales_channel guest: ok (guest)
+     * - if token is customer owned: must match customer
+     * - if token is integration: no owner; skip this restriction
+     */
+    if (
+      kind === "sales_channel" &&
+      (isGuest || owner?.id !== order.customer?.id)
+    ) {
+      return invalidateCheckout()
+    }
   }
 
   const appSettings: CheckoutSettings = {
@@ -274,7 +274,6 @@ export const getSettings = async ({
 
     config: getMfeConfig({
       jsonConfig: organization.config ?? {},
-      // ✅ this is the key part that fixes market:all tokens:
       market: orderMarketId ? `market:id:${orderMarketId}` : undefined,
       params: {
         lang: order.language_code,
