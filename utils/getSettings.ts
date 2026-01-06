@@ -151,26 +151,24 @@ export const getSettings = async ({
     } as InvalidCheckoutSettings
   }
 
-  if (!accessToken || !orderId)
+  if (!accessToken || !orderId) {
     return invalidateCheckout("missing_accessToken_or_orderId")
+  }
 
   const { slug, kind, isTest, isGuest, owner } = getTokenInfo(accessToken)
 
-  if (!slug || !kind) return invalidateCheckout("token_missing_slug_or_kind")
+  if (!slug || !kind) {
+    return invalidateCheckout("token_missing_slug_or_kind")
+  }
 
-  /**
-   * ✅ Production org safety check (recommended)
-   * Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in checkout app env (optional)
-   */
+  // ✅ Recommended production safety: ensure token is for your org
+  // Set NEXT_PUBLIC_CL_SLUG=bubbels-van-frits-2 in checkout app env
   const expectedSlug = (process.env.NEXT_PUBLIC_CL_SLUG || "").trim()
   if (isProduction() && expectedSlug && slug !== expectedSlug) {
     return invalidateCheckout("token_slug_mismatch")
   }
 
-  /**
-   * ✅ Checkout app should run on SALES CHANNEL token.
-   * We bootstrap it via /api/guest-token, so enforce it here.
-   */
+  // ✅ OFFICIAL FLOW: hosted checkout expects a SALES CHANNEL token
   if (String(kind) !== "sales_channel") {
     return invalidateCheckout(`token_kind_not_sales_channel (${String(kind)})`)
   }
@@ -229,15 +227,12 @@ export const getSettings = async ({
         console.log("[getSettings] error refreshing order", e)
       }
     }
-  } else if (order.status !== "placed") {
-    /**
-     * Ownership check for sales_channel tokens:
-     * - guest token: allow
-     * - owner token: must match order customer
-     */
-    if (!isGuest && owner?.id && owner.id !== order.customer?.id) {
-      return invalidateCheckout("owner_mismatch")
-    }
+  } else if (
+    order.status !== "placed" &&
+    (isGuest || owner?.id !== order.customer?.id)
+  ) {
+    // ✅ Official ownership check for sales_channel tokens
+    return invalidateCheckout("owner_mismatch_or_invalid_status")
   }
 
   const appSettings: CheckoutSettings = {
