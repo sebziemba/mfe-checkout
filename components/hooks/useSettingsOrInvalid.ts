@@ -11,13 +11,16 @@ interface UseSettingsOrInvalid {
 
 const DEBUG_KEY = "cl_checkout_debug"
 
-function pushDebug(entry: any) {
+function pushDebug(step: string, data?: any) {
   try {
-    const prev = JSON.parse(sessionStorage.getItem(DEBUG_KEY) || "[]")
-    const next = [...prev, { at: new Date().toISOString(), ...entry }].slice(
-      -200,
-    )
-    sessionStorage.setItem(DEBUG_KEY, JSON.stringify(next))
+    const prev = sessionStorage.getItem(DEBUG_KEY)
+    const arr = prev ? JSON.parse(prev) : []
+    arr.push({
+      ts: new Date().toISOString(),
+      step,
+      data,
+    })
+    sessionStorage.setItem(DEBUG_KEY, JSON.stringify(arr, null, 2))
   } catch {
     // ignore
   }
@@ -47,27 +50,23 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   >(undefined)
   const [isFetching, setIsFetching] = useState(true)
 
-  // Log initial route context once
+  // RESET debug log on first load
   useEffect(() => {
-    pushDebug({
-      step: "route_loaded",
-      href: window.location.href,
-      orderId: orderId ?? null,
-      hasAccessToken: !!accessTokenFromUrl,
-      tokenLen: accessTokenFromUrl?.length ?? 0,
-      isPaymentReturn,
-      hostname: window.location.hostname,
+    sessionStorage.removeItem(DEBUG_KEY)
+    pushDebug("hook_init", {
+      orderId,
+      accessTokenPresent: !!accessTokenFromUrl,
+      url: window.location.href,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Enforce official hosted format
+  // Enforce URL format
   useEffect(() => {
     if (!orderId) return
 
     if (!accessTokenFromUrl) {
-      pushDebug({ step: "missing_accessToken_in_url", orderId })
-      console.error("[checkout] missing accessToken in URL", { orderId })
+      pushDebug("missing_accessToken_in_url")
       navigate("/404")
       return
     }
@@ -79,54 +78,47 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
       if (!orderId || !accessTokenFromUrl) return
 
       setIsFetching(true)
-      pushDebug({ step: "getSettings_start", orderId })
 
-      try {
-        const fetchedSettings = await getSettings({
-          accessToken: accessTokenFromUrl,
-          orderId: orderId as string,
-          paymentReturn: isPaymentReturn,
-          subdomain: getSubdomain(window.location.hostname),
-        })
+      pushDebug("getSettings_start", {
+        orderId,
+        tokenPrefix: accessTokenFromUrl.slice(0, 16),
+        tokenLength: accessTokenFromUrl.length,
+        paymentReturn: isPaymentReturn,
+      })
 
-        pushDebug({
-          step: "getSettings_done",
-          validCheckout: (fetchedSettings as any)?.validCheckout,
-          retryOnError: (fetchedSettings as any)?.retryOnError,
-          reason: (fetchedSettings as any)?.debugReason ?? null,
-          orderId,
-        })
+      const fetchedSettings = await getSettings({
+        accessToken: accessTokenFromUrl,
+        orderId: orderId as string,
+        paymentReturn: isPaymentReturn,
+        subdomain: getSubdomain(window.location.hostname),
+        debug: true,
+      })
 
-        setSettings(fetchedSettings)
-      } catch (e: any) {
-        pushDebug({
-          step: "getSettings_exception",
-          orderId,
-          message: e?.message ?? String(e),
-        })
-        console.error("[checkout] getSettings exception", e)
-        navigate("/404")
-      } finally {
-        setIsFetching(false)
-      }
+      pushDebug("getSettings_result", fetchedSettings)
+
+      setSettings(fetchedSettings)
+      setIsFetching(false)
     }
 
     run()
-  }, [accessTokenFromUrl, orderId, isPaymentReturn, navigate])
+  }, [accessTokenFromUrl, orderId, isPaymentReturn])
 
-  if (isFetching) return { isLoading: true, settings: undefined }
+  if (isFetching) {
+    pushDebug("loading_state")
+    return { isLoading: true, settings: undefined }
+  }
 
   if (settings && !settings.validCheckout) {
-    pushDebug({
-      step: "invalid_checkout_navigate_404",
-      orderId,
-      reason: (settings as any)?.debugReason ?? null,
-      retryOnError: (settings as any)?.retryOnError ?? null,
-    })
+    pushDebug("invalid_checkout", settings)
 
-    if (!settings.retryOnError) navigate("/404")
+    if (!settings.retryOnError) {
+      navigate("/404")
+    }
+
     return { settings: undefined, retryOnError: true, isLoading: false }
   }
+
+  pushDebug("checkout_valid")
 
   return { settings, isLoading: false }
 }
