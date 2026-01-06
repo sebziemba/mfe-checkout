@@ -153,7 +153,6 @@ function getTokenInfo(accessToken: string) {
       owner,
       isGuest: !owner,
       scope: payload?.scope,
-      // helpful extras:
       orgId: payload?.organization?.id,
       appId: payload?.application?.id,
       clientId: payload?.application?.client_id,
@@ -183,15 +182,12 @@ export const getSettings = async ({
     reason: string,
     retry?: boolean,
   ): InvalidCheckoutSettings {
-    console.error("[getSettings] INVALID CHECKOUT:", reason, {
-      retryOnError: !!retry,
-      orderId,
-      tokenLen: accessToken?.length,
-    })
+    console.error("[getSettings] INVALID CHECKOUT:", reason)
     return {
       validCheckout: false,
       retryOnError: !!retry,
-    } as InvalidCheckoutSettings
+      ...({ debugReason: reason } as any),
+    } as any
   }
 
   dbg(debug, "[getSettings] start", {
@@ -217,14 +213,12 @@ export const getSettings = async ({
     return invalidateCheckout("token_missing_slug_or_kind")
   }
 
-  // ✅ Recommended production safety: ensure token is for your org
   const expectedSlug = (process.env.NEXT_PUBLIC_CL_SLUG || "").trim()
   if (isProduction() && expectedSlug && slug !== expectedSlug) {
     dbg(debug, "[getSettings] slug mismatch", { expectedSlug, slug })
     return invalidateCheckout("token_slug_mismatch")
   }
 
-  // ✅ OFFICIAL FLOW: hosted checkout expects a SALES CHANNEL token
   if (String(kind) !== "sales_channel") {
     dbg(debug, "[getSettings] token kind rejected", { kind })
     return invalidateCheckout(`token_kind_not_sales_channel (${String(kind)})`)
@@ -244,8 +238,8 @@ export const getSettings = async ({
 
   dbg(debug, "[getSettings] fetching organization + order", { orderId })
 
-  let organizationResource: any
-  let orderResource: any
+  let organizationResource: FetchResource<Organization> | undefined
+  let orderResource: FetchResource<Order> | undefined
 
   try {
     ;[organizationResource, orderResource] = await Promise.all([
@@ -280,7 +274,7 @@ export const getSettings = async ({
     marketId: orderMarketId,
     customerId: (order as any)?.customer?.id,
     guest: (order as any)?.guest,
-    token: (order as any)?.token
+    orderTokenPrefix: (order as any)?.token
       ? String((order as any).token).slice(0, 10) + "…"
       : null,
   })
@@ -293,7 +287,6 @@ export const getSettings = async ({
     return invalidateCheckout("no_shoppable_line_items")
   }
 
-  // ✅ TS-safe: no implicit any, no ts-expect-error needed
   const isShipmentRequired = (order.line_items || []).some((line_item: any) => {
     const itemType = line_item?.item_type as TypeAccepted
     const doNotShip = Boolean(line_item?.item?.do_not_ship)

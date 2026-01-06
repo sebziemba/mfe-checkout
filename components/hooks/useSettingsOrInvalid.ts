@@ -9,9 +9,18 @@ interface UseSettingsOrInvalid {
   isLoading: boolean
 }
 
-function dbg(enabled: boolean, ...args: any[]) {
-  if (!enabled) return
-  console.error(...args)
+const DEBUG_KEY = "cl_checkout_debug"
+
+function pushDebug(entry: any) {
+  try {
+    const prev = JSON.parse(sessionStorage.getItem(DEBUG_KEY) || "[]")
+    const next = [...prev, { at: new Date().toISOString(), ...entry }].slice(
+      -200,
+    )
+    sessionStorage.setItem(DEBUG_KEY, JSON.stringify(next))
+  } catch {
+    // ignore
+  }
 }
 
 export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
@@ -19,9 +28,6 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   const { orderId } = useParams()
   const [searchParams] = useSearchParams()
 
-  const debug = searchParams.get("debug") === "1"
-
-  // ✅ ONLY from URL query
   const accessTokenFromUrl = useMemo(() => {
     const t = searchParams.get("accessToken")
     return t && t.trim() ? t.trim() : ""
@@ -41,72 +47,64 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   >(undefined)
   const [isFetching, setIsFetching] = useState(true)
 
+  // Log initial route context once
   useEffect(() => {
-    dbg(debug, "[checkout][debug] useSettingsOrInvalid mount/update", {
-      orderId,
-      hasAccessTokenInUrl: !!accessTokenFromUrl,
-      accessTokenPrefix: accessTokenFromUrl
-        ? accessTokenFromUrl.slice(0, 16)
-        : null,
-      accessTokenLen: accessTokenFromUrl ? accessTokenFromUrl.length : 0,
+    pushDebug({
+      step: "route_loaded",
+      href: window.location.href,
+      orderId: orderId ?? null,
+      hasAccessToken: !!accessTokenFromUrl,
+      tokenLen: accessTokenFromUrl?.length ?? 0,
       isPaymentReturn,
-      href: typeof window !== "undefined" ? window.location.href : null,
+      hostname: window.location.hostname,
     })
-  }, [debug, orderId, accessTokenFromUrl, isPaymentReturn])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  // ✅ Enforce official hosted format:
-  // /order/:orderId?accessToken=<sales_channel_token>
+  // Enforce official hosted format
   useEffect(() => {
     if (!orderId) return
 
     if (!accessTokenFromUrl) {
-      dbg(
-        debug,
-        "[checkout][debug] missing accessToken in URL → navigate(/404)",
-        {
-          orderId,
-          href: typeof window !== "undefined" ? window.location.href : null,
-        },
-      )
+      pushDebug({ step: "missing_accessToken_in_url", orderId })
+      console.error("[checkout] missing accessToken in URL", { orderId })
       navigate("/404")
       return
     }
-  }, [orderId, accessTokenFromUrl, navigate, debug])
+  }, [orderId, accessTokenFromUrl, navigate])
 
-  // ✅ Load settings (only when token exists in URL)
+  // Load settings
   useEffect(() => {
     const run = async () => {
       if (!orderId || !accessTokenFromUrl) return
 
       setIsFetching(true)
-      dbg(debug, "[checkout][debug] calling getSettings()", {
-        orderId,
-        accessTokenPrefix: accessTokenFromUrl.slice(0, 16),
-        accessTokenLen: accessTokenFromUrl.length,
-      })
+      pushDebug({ step: "getSettings_start", orderId })
 
       try {
         const fetchedSettings = await getSettings({
           accessToken: accessTokenFromUrl,
           orderId: orderId as string,
           paymentReturn: isPaymentReturn,
-          // kept for signature compatibility
           subdomain: getSubdomain(window.location.hostname),
-          debug,
-        } as any)
+        })
 
-        dbg(debug, "[checkout][debug] getSettings() returned", fetchedSettings)
+        pushDebug({
+          step: "getSettings_done",
+          validCheckout: (fetchedSettings as any)?.validCheckout,
+          retryOnError: (fetchedSettings as any)?.retryOnError,
+          reason: (fetchedSettings as any)?.debugReason ?? null,
+          orderId,
+        })
 
         setSettings(fetchedSettings)
       } catch (e: any) {
-        dbg(debug, "[checkout][debug] getSettings() threw", {
-          name: e?.name,
-          message: e?.message,
-          status: e?.status || e?.response?.status,
-          errors: e?.errors || e?.response?.errors,
-          data: e?.response?.data,
+        pushDebug({
+          step: "getSettings_exception",
+          orderId,
+          message: e?.message ?? String(e),
         })
-        // keep consistent with invalid checkout behavior:
+        console.error("[checkout] getSettings exception", e)
         navigate("/404")
       } finally {
         setIsFetching(false)
@@ -114,12 +112,18 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
     }
 
     run()
-  }, [accessTokenFromUrl, orderId, isPaymentReturn, debug, navigate])
+  }, [accessTokenFromUrl, orderId, isPaymentReturn, navigate])
 
   if (isFetching) return { isLoading: true, settings: undefined }
 
   if (settings && !settings.validCheckout) {
-    dbg(debug, "[checkout][debug] invalid checkout settings", settings)
+    pushDebug({
+      step: "invalid_checkout_navigate_404",
+      orderId,
+      reason: (settings as any)?.debugReason ?? null,
+      retryOnError: (settings as any)?.retryOnError ?? null,
+    })
+
     if (!settings.retryOnError) navigate("/404")
     return { settings: undefined, retryOnError: true, isLoading: false }
   }
