@@ -1,27 +1,35 @@
 import { ErrorContainer } from "components/composite/ErrorContainer"
 import { ErrorCode, Text } from "components/composite/ErrorContainer/styled"
 import type { NextPage } from "next"
-import { useEffect, useState } from "react"
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
-
-const DEBUG_KEY = "cl_checkout_debug"
+import { readDebug } from "utils/debugTrace"
 
 const Invalid: NextPage<{ errorCode?: 404 | 419; message?: string }> = ({
   errorCode = 404,
   message = "general.invalid",
 }) => {
   const { t } = useTranslation()
-  const [debug, setDebug] = useState<any[]>([])
 
-  useEffect(() => {
+  const debug = useMemo(() => {
     try {
-      const raw = sessionStorage.getItem(DEBUG_KEY)
-      const parsed = raw ? JSON.parse(raw) : []
-      setDebug(Array.isArray(parsed) ? parsed : [])
+      const arr = readDebug()
+      return arr.length ? JSON.stringify(arr, null, 2) : null
     } catch {
-      setDebug([])
+      return null
     }
   }, [])
+
+  const copy = async () => {
+    if (!debug) return
+    try {
+      await navigator.clipboard.writeText(debug)
+      // use alert because console logs seem to be suppressed for you
+      alert("Debug trace copied to clipboard.")
+    } catch {
+      alert("Could not copy. Select the text and copy manually.")
+    }
+  }
 
   return (
     <ErrorContainer>
@@ -30,23 +38,53 @@ const Invalid: NextPage<{ errorCode?: 404 | 419; message?: string }> = ({
         {message === "general.invalid" ? t(message) : message}
       </Text>
 
-      {/* Debug output (temporary) */}
-      <div style={{ width: "100%", maxWidth: 960, marginTop: 24 }}>
-        <pre
-          style={{
-            whiteSpace: "pre-wrap",
-            fontSize: 12,
-            textAlign: "left",
-            padding: 12,
-            borderRadius: 8,
-            background: "rgba(0,0,0,0.04)",
-            overflowX: "auto",
-          }}
-        >
-          {debug.length
-            ? JSON.stringify(debug, null, 2)
-            : "No debug trace found in sessionStorage."}
-        </pre>
+      <div style={{ marginTop: 16, maxWidth: 900, width: "100%" }}>
+        {!debug ? (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              background: "rgba(0,0,0,0.06)",
+              fontSize: 13,
+            }}
+          >
+            No debug trace found in storage (session/local).
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={copy}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(0,0,0,0.2)",
+                  background: "white",
+                  cursor: "pointer",
+                }}
+              >
+                Copy debug
+              </button>
+            </div>
+
+            <pre
+              style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontSize: 12,
+                lineHeight: 1.35,
+                padding: 12,
+                borderRadius: 8,
+                background: "rgba(0,0,0,0.06)",
+                maxHeight: 320,
+                overflow: "auto",
+              }}
+            >
+              {debug}
+            </pre>
+          </>
+        )}
       </div>
     </ErrorContainer>
   )

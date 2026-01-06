@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { clearDebug, pushDebug } from "utils/debugTrace"
 import { getSettings } from "utils/getSettings"
 import { getSubdomain } from "utils/getSubdomain"
 
@@ -9,32 +10,12 @@ interface UseSettingsOrInvalid {
   isLoading: boolean
 }
 
-const DEBUG_KEY = "cl_checkout_debug"
-
-function pushDebug(step: string, data?: any) {
-  try {
-    const prev = sessionStorage.getItem(DEBUG_KEY)
-    const arr = prev ? JSON.parse(prev) : []
-    arr.push({
-      ts: new Date().toISOString(),
-      step,
-      data,
-    })
-    sessionStorage.setItem(DEBUG_KEY, JSON.stringify(arr, null, 2))
-  } catch {
-    // ignore
-  }
-}
-
 export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   const navigate = useNavigate()
   const { orderId } = useParams()
   const [searchParams] = useSearchParams()
 
-  const accessTokenFromUrl = useMemo(() => {
-    const t = searchParams.get("accessToken")
-    return t && t.trim() ? t.trim() : ""
-  }, [searchParams])
+  const accessTokenFromUrl = (searchParams.get("accessToken") || "").trim()
 
   const paymentReturn = searchParams.get("paymentReturn")
   const redirectResult = searchParams.get("redirectResult")
@@ -50,29 +31,35 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   >(undefined)
   const [isFetching, setIsFetching] = useState(true)
 
-  // RESET debug log on first load
-  useEffect(() => {
-    sessionStorage.removeItem(DEBUG_KEY)
-    pushDebug("hook_init", {
-      orderId,
-      accessTokenPresent: !!accessTokenFromUrl,
-      url: window.location.href,
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const didInit = useRef(false)
 
-  // Enforce URL format
+  // ✅ Synchronous init (not useEffect) so it happens even if we redirect fast
+  if (!didInit.current && typeof window !== "undefined") {
+    didInit.current = true
+    clearDebug()
+    pushDebug("hook_init", {
+      href: window.location.href,
+      orderId,
+      hasAccessToken: !!accessTokenFromUrl,
+      accessTokenPrefix: accessTokenFromUrl
+        ? accessTokenFromUrl.slice(0, 16)
+        : null,
+      accessTokenLen: accessTokenFromUrl ? accessTokenFromUrl.length : 0,
+    })
+  }
+
+  // ✅ Enforce token in URL
   useEffect(() => {
     if (!orderId) return
 
     if (!accessTokenFromUrl) {
-      pushDebug("missing_accessToken_in_url")
+      pushDebug("missing_accessToken_in_url", { orderId })
       navigate("/404")
       return
     }
   }, [orderId, accessTokenFromUrl, navigate])
 
-  // Load settings
+  // ✅ Load settings
   useEffect(() => {
     const run = async () => {
       if (!orderId || !accessTokenFromUrl) return
@@ -81,9 +68,8 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
 
       pushDebug("getSettings_start", {
         orderId,
-        tokenPrefix: accessTokenFromUrl.slice(0, 16),
-        tokenLength: accessTokenFromUrl.length,
         paymentReturn: isPaymentReturn,
+        subdomain: getSubdomain(window.location.hostname),
       })
 
       const fetchedSettings = await getSettings({
@@ -111,14 +97,10 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   if (settings && !settings.validCheckout) {
     pushDebug("invalid_checkout", settings)
 
-    if (!settings.retryOnError) {
-      navigate("/404")
-    }
-
+    if (!settings.retryOnError) navigate("/404")
     return { settings: undefined, retryOnError: true, isLoading: false }
   }
 
   pushDebug("checkout_valid")
-
   return { settings, isLoading: false }
 }
