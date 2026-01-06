@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { getSettings } from "utils/getSettings"
 import { getSubdomain } from "utils/getSubdomain"
-import { useLocalStorageToken } from "./useLocalStorageToken"
 
 interface UseSettingsOrInvalid {
   settings?: CheckoutSettings
@@ -15,65 +14,49 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   const { orderId } = useParams()
   const [searchParams] = useSearchParams()
 
-  const accessTokenFromUrl = searchParams.get("accessToken")
+  // ✅ ONLY from URL query
+  const accessTokenFromUrl = useMemo(() => {
+    const t = searchParams.get("accessToken")
+    return t && t.trim() ? t.trim() : ""
+  }, [searchParams])
+
   const paymentReturn = searchParams.get("paymentReturn")
   const redirectResult = searchParams.get("redirectResult")
   const paymentIntentClientSecret = searchParams.get(
     "payment_intent_client_secret",
   )
 
+  const isPaymentReturn =
+    paymentReturn === "true" || !!redirectResult || !!paymentIntentClientSecret
+
   const [settings, setSettings] = useState<
     CheckoutSettings | InvalidCheckoutSettings | undefined
   >(undefined)
   const [isFetching, setIsFetching] = useState(true)
 
-  const [savedAccessToken, setAccessToken] = useLocalStorageToken(
-    "checkoutAccessToken",
-    (accessTokenFromUrl as string) || "",
-  )
-
-  const isPaymentReturn =
-    paymentReturn === "true" || !!redirectResult || !!paymentIntentClientSecret
-
-  // 1) If token exists in URL, store it
+  // ✅ Enforce official hosted format:
+  // /order/:orderId?accessToken=<sales_channel_token>
   useEffect(() => {
-    if (accessTokenFromUrl && accessTokenFromUrl !== savedAccessToken) {
-      setAccessToken(accessTokenFromUrl)
+    if (!orderId) return
+
+    if (!accessTokenFromUrl) {
+      navigate("/404")
+      return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessTokenFromUrl])
+  }, [orderId, accessTokenFromUrl, navigate])
 
-  // 2) If no token anywhere, fetch Sales Channel token from checkout server
-  useEffect(() => {
-    const ensureToken = async () => {
-      if (savedAccessToken) return
-
-      try {
-        const r = await fetch("/api/guest-token", { method: "POST" })
-        const j = await r.json()
-        if (!j?.ok || !j?.accessToken) throw new Error("guest token failed")
-        setAccessToken(j.accessToken)
-      } catch {
-        navigate("/404")
-      }
-    }
-
-    ensureToken()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedAccessToken])
-
-  // 3) Load settings once token exists
+  // ✅ Load settings (only when token exists in URL)
   useEffect(() => {
     const run = async () => {
-      if (!savedAccessToken || !orderId) return
+      if (!orderId || !accessTokenFromUrl) return
 
       setIsFetching(true)
+
       const fetchedSettings = await getSettings({
-        accessToken: savedAccessToken,
+        accessToken: accessTokenFromUrl,
         orderId: orderId as string,
         paymentReturn: isPaymentReturn,
-        // subdomain is now NOT used for validation after step #2 change,
-        // but keep it to avoid touching more code.
+        // keep for signature compatibility (custom domain means it's not reliable)
         subdomain: getSubdomain(window.location.hostname),
       })
 
@@ -82,7 +65,7 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
     }
 
     run()
-  }, [savedAccessToken, orderId, isPaymentReturn])
+  }, [accessTokenFromUrl, orderId, isPaymentReturn])
 
   if (isFetching) return { isLoading: true, settings: undefined }
 
