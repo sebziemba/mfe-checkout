@@ -158,7 +158,6 @@ const Checkout: React.FC<Props> = ({
                   expirationInfo={expirationInfo}
                 />
               </div>
-              <Footer />
             </div>
           }
           main={
