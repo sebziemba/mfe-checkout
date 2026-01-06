@@ -7,29 +7,19 @@ const shouldAnalyzeBundles = process.env.ANALYZE === "true"
 /** @type { import('next').NextConfig } */
 let nextConfig = {
   reactStrictMode: true,
+
+  // This app is an SPA (static export) in production.
+  // Routing is handled by react-router + vercel.json rewrites.
   output: process.env.NODE_ENV === "production" ? "export" : "standalone",
-  distDir: "out/dist",
+
   poweredByHeader: false,
-  // When when app is exported as SPA and served in a sub-folder
+
+  // Keep assets working if you host under a base path (optional)
   assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH
     ? `${process.env.NEXT_PUBLIC_BASE_PATH}/`
     : undefined,
-  generateBuildId: () => nextBuildId({ dir: __dirname }),
-}
 
-// rewrite rules affect only development mode, since Next router will return 404 for paths that only exist in react-router
-if (process.env.NODE_ENV !== "production") {
-  nextConfig = {
-    ...nextConfig,
-    async rewrites() {
-      return [
-        {
-          source: "/:any*",
-          destination: "/",
-        },
-      ]
-    },
-  }
+  generateBuildId: () => nextBuildId({ dir: __dirname }),
 }
 
 if (shouldAnalyzeBundles) {

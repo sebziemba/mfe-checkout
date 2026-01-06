@@ -1,7 +1,7 @@
 // pages/order/[orderId].tsx
 import type { NextPage } from "next"
 import { useRouter } from "next/router"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import Order from "../Order"
 
 const OrderById: NextPage = () => {
@@ -11,30 +11,20 @@ const OrderById: NextPage = () => {
   const [bootError, setBootError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
 
-  // Read accessToken ONLY from the URL query
-  const accessToken = useMemo(() => {
-    if (typeof window === "undefined") return null
-    try {
-      const url = new URL(window.location.href)
-      const token = url.searchParams.get("accessToken")
-      return token && token.trim() ? token.trim() : null
-    } catch {
-      return null
-    }
-  }, [])
-
   useEffect(() => {
     if (!router.isReady) return
     if (!orderId) return
 
-    if (!accessToken) {
-      // No bootstrapping. Hosted flow requires token in URL.
+    const url = new URL(window.location.href)
+    const accessToken = url.searchParams.get("accessToken")
+
+    if (!accessToken || !accessToken.trim()) {
       setBootError("missing_accessToken_in_url")
       return
     }
 
     setReady(true)
-  }, [router.isReady, orderId, accessToken])
+  }, [router.isReady, orderId])
 
   if (bootError) {
     return (
