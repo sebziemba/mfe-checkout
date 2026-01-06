@@ -32,10 +32,15 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
   const [isFetching, setIsFetching] = useState(true)
 
   const didInit = useRef(false)
+  const didLogLoading = useRef(false)
+  const didLogValid = useRef(false)
+  const didNavigate404 = useRef(false)
 
-  // ✅ Synchronous init (not useEffect) so it happens even if we redirect fast
-  if (!didInit.current && typeof window !== "undefined") {
+  // ✅ init trace once
+  useEffect(() => {
+    if (didInit.current) return
     didInit.current = true
+
     clearDebug()
     pushDebug("hook_init", {
       href: window.location.href,
@@ -46,61 +51,110 @@ export const useSettingsOrInvalid = (): UseSettingsOrInvalid => {
         : null,
       accessTokenLen: accessTokenFromUrl ? accessTokenFromUrl.length : 0,
     })
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  // ✅ Enforce token in URL
+  // ✅ enforce token in URL
   useEffect(() => {
     if (!orderId) return
 
     if (!accessTokenFromUrl) {
       pushDebug("missing_accessToken_in_url", { orderId })
-      navigate("/404")
-      return
+
+      // prevent multiple navigations / double logs
+      if (!didNavigate404.current) {
+        didNavigate404.current = true
+        navigate("/404")
+      }
     }
   }, [orderId, accessTokenFromUrl, navigate])
 
-  // ✅ Load settings
+  // ✅ load settings
   useEffect(() => {
     const run = async () => {
       if (!orderId || !accessTokenFromUrl) return
 
       setIsFetching(true)
+      didLogLoading.current = false
+      didLogValid.current = false
+
+      const subdomain = getSubdomain(window.location.hostname)
 
       pushDebug("getSettings_start", {
         orderId,
         paymentReturn: isPaymentReturn,
-        subdomain: getSubdomain(window.location.hostname),
+        subdomain,
       })
 
-      const fetchedSettings = await getSettings({
-        accessToken: accessTokenFromUrl,
-        orderId: orderId as string,
-        paymentReturn: isPaymentReturn,
-        subdomain: getSubdomain(window.location.hostname),
-        debug: true,
-      })
+      try {
+        const fetchedSettings = await getSettings({
+          accessToken: accessTokenFromUrl,
+          orderId: orderId as string,
+          paymentReturn: isPaymentReturn,
+          subdomain,
+          debug: true,
+        })
 
-      pushDebug("getSettings_result", fetchedSettings)
-
-      setSettings(fetchedSettings)
-      setIsFetching(false)
+        pushDebug("getSettings_result", fetchedSettings)
+        setSettings(fetchedSettings)
+      } catch (e: any) {
+        pushDebug("getSettings_throw", {
+          message: e?.message,
+          name: e?.name,
+        })
+        setSettings({ validCheckout: false, retryOnError: true } as any)
+      } finally {
+        setIsFetching(false)
+      }
     }
 
     run()
   }, [accessTokenFromUrl, orderId, isPaymentReturn])
 
-  if (isFetching) {
+  // ✅ log loading state ONCE per load
+  useEffect(() => {
+    if (!isFetching) return
+    if (didLogLoading.current) return
+    didLogLoading.current = true
     pushDebug("loading_state")
-    return { isLoading: true, settings: undefined }
-  }
+  }, [isFetching])
+
+  // ✅ invalid checkout -> log + redirect
+  useEffect(() => {
+    if (!settings) return
+    if (isFetching) return
+
+    if (!settings.validCheckout) {
+      pushDebug("invalid_checkout", settings)
+
+      if (!settings.retryOnError && !didNavigate404.current) {
+        didNavigate404.current = true
+        navigate("/404")
+      }
+    }
+  }, [settings, isFetching, navigate])
+
+  // ✅ valid checkout -> log once
+  useEffect(() => {
+    if (!settings) return
+    if (isFetching) return
+    if (!settings.validCheckout) return
+    if (didLogValid.current) return
+
+    didLogValid.current = true
+    pushDebug("checkout_valid", {
+      orderId: (settings as any)?.orderId,
+      endpoint: (settings as any)?.endpoint,
+      slug: (settings as any)?.slug,
+    })
+  }, [settings, isFetching])
+
+  // render output (NO logging here)
+  if (isFetching) return { isLoading: true, settings: undefined }
 
   if (settings && !settings.validCheckout) {
-    pushDebug("invalid_checkout", settings)
-
-    if (!settings.retryOnError) navigate("/404")
     return { settings: undefined, retryOnError: true, isLoading: false }
   }
 
-  pushDebug("checkout_valid")
   return { settings, isLoading: false }
 }
