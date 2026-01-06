@@ -22,6 +22,8 @@ class AppDocument extends Document {
             rel="stylesheet"
           />
           <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+          {/* Debug marker without dangerouslySetInnerHTML */}
+          <script src="/debug-boot.js" defer />
         </Head>
         <body className="antialiased font-medium bg-gray-50">
           <Main />

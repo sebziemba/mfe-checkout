@@ -1,4 +1,5 @@
 import type { AppProps } from "next/app"
+import { pushDebug } from "utils/debugTrace"
 import "../styles/theme.css"
 import "../styles/globals.css"
 import "../styles/check-icon.css"
@@ -26,6 +27,15 @@ function CheckoutApp(props: AppProps) {
       setBrowser(true)
       loadNewRelicAgent()
     }
+  }, [])
+
+  useEffect(() => {
+    try {
+      pushDebug("APP_BOOT", {
+        href: window.location.href,
+        ua: navigator.userAgent,
+      })
+    } catch {}
   }, [])
 
   return browser ? <Component {...pageProps} /> : null
