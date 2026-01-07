@@ -24,13 +24,52 @@ export default function CheckoutApp({ Component, pageProps }: AppProps) {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    let mounted = true
+
     ;(async () => {
       await initI18n()
+
+      // Force Dutch after init
+      await i18n.changeLanguage("nl")
+
+      // Guard: if anything switches it back, immediately set NL again
+      const onLangChanged = (lng: string) => {
+        if (lng !== "nl") {
+          void i18n.changeLanguage("nl")
+        }
+      }
+
+      i18n.on("languageChanged", onLangChanged)
+
+      if (!mounted) {
+        i18n.off("languageChanged", onLangChanged)
+        return
+      }
+
       setReady(true)
+
+      // your existing stuff
+      loadNewRelicAgent()
+      try {
+        pushDebug("APP_BOOT", {
+          href: window.location.href,
+          ua: navigator.userAgent,
+          lang: navigator.language,
+        })
+      } catch {}
 
       // proof
       console.log("[APP] i18n.language =", i18n.language)
+
+      // cleanup on unmount
+      return () => {
+        i18n.off("languageChanged", onLangChanged)
+      }
     })()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   if (!ready) return null
