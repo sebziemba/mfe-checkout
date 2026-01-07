@@ -9,11 +9,10 @@ interface Props {
   main: React.ReactNode
 }
 
-/** Keep your existing font variables exactly */
 const Hyundai = localFont({
   variable: "--font-body",
   display: "swap",
-  fallback: [],
+  fallback: ["system-ui", "Arial"],
   adjustFontFallback: false,
   src: [
     {
@@ -35,8 +34,16 @@ const Hyundai = localFont({
 })
 
 const ClassyVogue = localFont({
-  src: "../../styles/fonts/Classyvogueregular.ttf",
   variable: "--font-title",
+  display: "swap",
+  fallback: ["serif"],
+  src: [
+    {
+      path: "../../styles/fonts/Classyvogueregular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
 })
 
 export const LayoutDefault: FC<Props> = ({ main, aside }) => {
@@ -44,7 +51,11 @@ export const LayoutDefault: FC<Props> = ({ main, aside }) => {
     <Base>
       <Container>
         <div
-          className={`${Hyundai.variable} font-body flex flex-wrap justify-end items-stretch flex-col min-h-full md:h-screen md:flex-row`}
+          className={[
+            Hyundai.variable,
+            ClassyVogue.variable,
+            "font-body flex flex-wrap justify-end items-stretch flex-col min-h-full md:h-screen md:flex-row",
+          ].join(" ")}
         >
           <div className="flex-none md:flex-1">{aside}</div>
           <div className="flex-none md:flex-1 justify-center order-first md:order-last">

@@ -12,6 +12,7 @@ import type { AppProviderData } from "components/data/AppProvider"
 import useDeviceDetect from "components/hooks/useDeviceDetect"
 import { useSettingsOrInvalid } from "components/hooks/useSettingsOrInvalid"
 import { LINE_ITEMS_SHOPPABLE } from "components/utils/constants"
+import { useMemo } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { CouponOrGiftCard } from "./CouponOrGiftCard"
 import { ExpireTimer } from "./ExpireTimer"
@@ -40,6 +41,8 @@ interface Props {
   expirationInfo?: NullableType<ExpirationInfo>
 }
 
+const VAT_RATE = 0.21
+
 export const OrderSummary: React.FC<Props> = ({
   appCtx,
   readonly,
@@ -53,11 +56,31 @@ export const OrderSummary: React.FC<Props> = ({
   const { settings } = useSettingsOrInvalid()
 
   const hide_promo_code = settings?.config?.checkout?.hide_promo_code
+
+  // CL "calculated" gate (their logic)
   const isTaxCalculated = appCtx.isShipmentRequired
     ? appCtx.hasBillingAddress &&
       appCtx.hasShippingAddress &&
       appCtx.hasShippingMethod
     : appCtx.hasBillingAddress
+
+  // formatting helpers
+  const locale = useMemo(() => {
+    return (appCtx as any)?.language || (appCtx as any)?.locale || "nl-NL"
+  }, [appCtx])
+
+  const currency = useMemo(() => {
+    return (
+      (appCtx as any)?.currencyCode || (appCtx as any)?.currency_code || "EUR"
+    )
+  }, [appCtx])
+
+  const fmt = useMemo(() => {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+    })
+  }, [locale, currency])
 
   const lineItems = !readonly ? (
     <SummaryHeader>
@@ -85,24 +108,22 @@ export const OrderSummary: React.FC<Props> = ({
       </SummarySubTitle>
     </SummaryHeader>
   ) : null
+
   return (
     <Wrapper data-testid="order-summary">
       <LineItemsContainer>
         <>
           {lineItems}
-          {
-            <>
-              {LINE_ITEMS_SHOPPABLE.map((type) => (
-                <LineItemTypes
-                  type={type}
-                  key={type}
-                  hideItemCodes={hideItemCodes}
-                />
-              ))}
-            </>
-          }
+          {LINE_ITEMS_SHOPPABLE.map((type) => (
+            <LineItemTypes
+              type={type}
+              key={type}
+              hideItemCodes={hideItemCodes}
+            />
+          ))}
         </>
       </LineItemsContainer>
+
       <TotalWrapper>
         <AmountSpacer />
         <AmountWrapper>
@@ -112,45 +133,32 @@ export const OrderSummary: React.FC<Props> = ({
               setCouponOrGiftCard={appCtx.setCouponOrGiftCard}
             />
           )}
+
+          {/* ✅ Subtotal EXCL VAT (derived if market is taxIncluded) */}
           <SubTotalAmount>
-            {(sub) => (
-              <TaxesAmount>
-                {(tax) => {
-                  const currency =
-                    (appCtx as any)?.currencyCode ||
-                    (appCtx as any)?.currency_code ||
-                    "EUR"
+            {(sub: any) => {
+              const grossCents = Number(sub?.priceCents || 0)
 
-                  const locale =
-                    (appCtx as any)?.language ||
-                    (appCtx as any)?.locale ||
-                    "nl-NL"
+              const netCents = appCtx.taxIncluded
+                ? Math.round(grossCents / (1 + VAT_RATE))
+                : grossCents
 
-                  // If your market is tax-included, subtotalExcl = subtotal - tax portion
-                  // If tax is not included, subtotalExcl = subtotal
-                  const subtotalExclCents = appCtx.taxIncluded
-                    ? Math.max(0, (sub.priceCents || 0) - (tax.priceCents || 0))
-                    : sub.priceCents || 0
-
-                  const subtotalExcl = new Intl.NumberFormat(locale, {
-                    style: "currency",
-                    currency,
-                  }).format(subtotalExclCents / 100)
-
-                  return (
-                    <RecapLine>
-                      <RecapLineItem>
-                        {t("orderRecap.subtotal_amount")}
-                      </RecapLineItem>
-                      <div data-testid="subtotal-excl">{subtotalExcl}</div>
-                    </RecapLine>
-                  )
-                }}
-              </TaxesAmount>
-            )}
+              return (
+                <RecapLine>
+                  <RecapLineItem>
+                    {t("orderRecap.subtotal_amount")}{" "}
+                    {appCtx.taxIncluded ? "(excl. BTW)" : ""}
+                  </RecapLineItem>
+                  <div data-testid="subtotal-amount">
+                    {fmt.format(netCents / 100)}
+                  </div>
+                </RecapLine>
+              )
+            }}
           </SubTotalAmount>
+
           <DiscountAmount>
-            {(props) => {
+            {(props: any) => {
               if (props.priceCents === 0) return <></>
               return (
                 <RecapLine>
@@ -162,8 +170,9 @@ export const OrderSummary: React.FC<Props> = ({
               )
             }}
           </DiscountAmount>
+
           <AdjustmentAmount>
-            {(props) => {
+            {(props: any) => {
               if (props.priceCents === 0) return <></>
               return (
                 <RecapLine>
@@ -177,7 +186,7 @@ export const OrderSummary: React.FC<Props> = ({
           </AdjustmentAmount>
 
           <ShippingAmount>
-            {(props) => {
+            {(props: any) => {
               if (!appCtx.isShipmentRequired) return <></>
               return (
                 <RecapLine>
@@ -197,7 +206,7 @@ export const OrderSummary: React.FC<Props> = ({
           </ShippingAmount>
 
           <PaymentMethodAmount>
-            {(props) => {
+            {(props: any) => {
               if (props.priceCents === 0) return <></>
               return (
                 <RecapLine data-testid="payment-method-amount">
@@ -209,46 +218,67 @@ export const OrderSummary: React.FC<Props> = ({
               )
             }}
           </PaymentMethodAmount>
-          <RecapLine>
-            <TaxesAmount>
-              {(props) => {
-                return (
-                  <>
-                    <RecapLineItem>
-                      <Trans
-                        i18nKey={
-                          appCtx.taxIncluded
-                            ? "orderRecap.tax_included_amount"
-                            : "orderRecap.tax_amount"
-                        }
-                        components={
-                          isTaxCalculated
-                            ? {
-                                style: (
-                                  <span
-                                    className={
-                                      appCtx.taxIncluded
-                                        ? "text-gray-500 font-normal"
-                                        : ""
-                                    }
-                                  />
-                                ),
-                              }
-                            : {}
-                        }
-                      />
-                    </RecapLineItem>
-                    <div data-testid="tax-amount">
-                      {isTaxCalculated ? props.price : t("orderRecap.notSet")}
-                    </div>
-                  </>
-                )
-              }}
-            </TaxesAmount>
-          </RecapLine>
+
+          {/* ✅ VAT line: show immediately (derived 21%) until CL calculates */}
+          <TaxesAmount>
+            {(tax: any) => {
+              return (
+                <SubTotalAmount>
+                  {(sub: any) => {
+                    const grossCents = Number(sub?.priceCents || 0)
+
+                    // If CL calculated taxes, use CL's number.
+                    // If not calculated yet, derive 21% VAT from subtotal.
+                    const taxCents = isTaxCalculated
+                      ? Number(tax?.priceCents || 0)
+                      : appCtx.taxIncluded
+                        ? Math.max(
+                            0,
+                            grossCents -
+                              Math.round(grossCents / (1 + VAT_RATE)),
+                          )
+                        : Math.round(grossCents * VAT_RATE)
+
+                    return (
+                      <RecapLine>
+                        <RecapLineItem>
+                          <Trans
+                            i18nKey={
+                              appCtx.taxIncluded
+                                ? "orderRecap.tax_included_amount"
+                                : "orderRecap.tax_amount"
+                            }
+                            components={
+                              isTaxCalculated
+                                ? {
+                                    style: (
+                                      <span
+                                        className={
+                                          appCtx.taxIncluded
+                                            ? "text-gray-500 font-normal"
+                                            : ""
+                                        }
+                                      />
+                                    ),
+                                  }
+                                : {}
+                            }
+                          />
+                        </RecapLineItem>
+
+                        <div data-testid="tax-amount">
+                          {fmt.format(taxCents / 100)}
+                        </div>
+                      </RecapLine>
+                    )
+                  }}
+                </SubTotalAmount>
+              )
+            }}
+          </TaxesAmount>
 
           <GiftCardAmount>
-            {(props) => {
+            {(props: any) => {
               if (props.priceCents === 0) return <></>
               return (
                 <RecapLine>
@@ -260,6 +290,7 @@ export const OrderSummary: React.FC<Props> = ({
               )
             }}
           </GiftCardAmount>
+
           <RecapLineTotal>
             <RecapLineItemTotal>
               {t("orderRecap.total_amount")}
@@ -269,6 +300,7 @@ export const OrderSummary: React.FC<Props> = ({
               className="text-xl font-extrabold"
             />
           </RecapLineTotal>
+
           {!appCtx.isComplete && <ReturnToCart cartUrl={appCtx.cartUrl} />}
         </AmountWrapper>
       </TotalWrapper>
