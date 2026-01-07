@@ -112,43 +112,10 @@ export const OrderSummary: React.FC<Props> = ({
               setCouponOrGiftCard={appCtx.setCouponOrGiftCard}
             />
           )}
-          <SubTotalAmount>
-            {(sub) => (
-              <TaxesAmount>
-                {(tax) => {
-                  const currency =
-                    (appCtx as any)?.currencyCode ||
-                    (appCtx as any)?.currency_code ||
-                    "EUR"
-
-                  const locale =
-                    (appCtx as any)?.language ||
-                    (appCtx as any)?.locale ||
-                    "nl-NL"
-
-                  // If your market is tax-included, subtotalExcl = subtotal - tax portion
-                  // If tax is not included, subtotalExcl = subtotal
-                  const subtotalExclCents = appCtx.taxIncluded
-                    ? Math.max(0, (sub.priceCents || 0) - (tax.priceCents || 0))
-                    : sub.priceCents || 0
-
-                  const subtotalExcl = new Intl.NumberFormat(locale, {
-                    style: "currency",
-                    currency,
-                  }).format(subtotalExclCents / 100)
-
-                  return (
-                    <RecapLine>
-                      <RecapLineItem>
-                        {t("orderRecap.subtotal_amount")}
-                      </RecapLineItem>
-                      <div data-testid="subtotal-excl">{subtotalExcl}</div>
-                    </RecapLine>
-                  )
-                }}
-              </TaxesAmount>
-            )}
-          </SubTotalAmount>
+          <RecapLine>
+            <RecapLineItem>{t("orderRecap.subtotal_amount")}</RecapLineItem>
+            <SubTotalAmount />
+          </RecapLine>
           <DiscountAmount>
             {(props) => {
               if (props.priceCents === 0) return <></>
@@ -217,7 +184,7 @@ export const OrderSummary: React.FC<Props> = ({
                     <RecapLineItem>
                       <Trans
                         i18nKey={
-                          appCtx.taxIncluded
+                          isTaxCalculated && appCtx.taxIncluded
                             ? "orderRecap.tax_included_amount"
                             : "orderRecap.tax_amount"
                         }
