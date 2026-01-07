@@ -43,6 +43,7 @@ module.exports = {
     },
     fontFamily: {
       body: ["var(--font-body)", "sans-serif"],
+      title: ["var(--font-title)", "sans-serif"],
     },
     borderColor: (theme) => ({
       ...theme("colors"),

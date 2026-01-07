@@ -165,7 +165,7 @@ const Checkout: React.FC<Props> = ({
               <Logo
                 logoUrl={logoUrl}
                 companyName={companyName}
-                className="block md:hidden"
+                className="block md:hidden font-title"
               />
               <MainHeader
                 orderNumber={orderNumber}

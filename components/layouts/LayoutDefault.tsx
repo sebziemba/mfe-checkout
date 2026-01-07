@@ -34,12 +34,17 @@ const Hyundai = localFont({
   ],
 })
 
+const ClassyVogue = localFont({
+  src: "../../../public/fonts/Classyvogueregular.ttf",
+  variable: "--font-title",
+})
+
 export const LayoutDefault: FC<Props> = ({ main, aside }) => {
   return (
     <Base>
       <Container>
         <div
-          className={`${Hyundai.variable} font-body flex flex-wrap justify-end items-stretch flex-col min-h-full md:h-screen md:flex-row`}
+          className={`${Hyundai.variable} font-body ${ClassyVogue.variable} font-title flex flex-wrap justify-end items-stretch flex-col min-h-full md:h-screen md:flex-row`}
         >
           <div className="flex-none md:flex-1">{aside}</div>
           <div className="flex-none md:flex-1 justify-center order-first md:order-last">
