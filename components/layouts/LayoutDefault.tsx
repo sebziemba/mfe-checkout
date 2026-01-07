@@ -35,7 +35,7 @@ const Hyundai = localFont({
 })
 
 const ClassyVogue = localFont({
-  src: "../../../public/fonts/Classyvogueregular.ttf",
+  src: "../../styles/fonts/Classyvogueregular.ttf",
   variable: "--font-title",
 })
 
