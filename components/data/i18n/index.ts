@@ -29,11 +29,8 @@ const resources = {
 const FORCE_LNG = "nl"
 
 export function initI18n() {
-  // If someone else initialized i18next, we still force Dutch.
   if (i18n.isInitialized) {
-    if (i18n.language !== FORCE_LNG) {
-      void i18n.changeLanguage(FORCE_LNG)
-    }
+    void i18n.changeLanguage(FORCE_LNG)
     return
   }
 
@@ -41,7 +38,6 @@ export function initI18n() {
     resources,
     lng: FORCE_LNG,
     fallbackLng: FORCE_LNG,
-
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
   })
