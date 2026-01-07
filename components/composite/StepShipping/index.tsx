@@ -128,19 +128,61 @@ export const StepShipping: React.FC<Props> = () => {
     },
   ]
 
+  // ✅ Helper: try to extract stock transfers in a tolerant way
+  const getShipmentStockTransfers = (shipment: any): any[] => {
+    if (!shipment) return []
+    return (
+      shipment.stockTransfers ??
+      shipment.stock_transfers ??
+      shipment.stock_transfers_nodes ??
+      shipment.stock_transfer ??
+      shipment.stockTransfer ??
+      []
+    )
+  }
+
+  // ✅ DEBUG: log what CL checkout knows at the moment the shipping step is active
   useEffect(() => {
     if (!appCtx) return
 
-    // Handig om te zien welke context CL gebruikt
-    console.log("[Shipping] order:", {
-      id: (appCtx as any).order?.id,
-      market:
-        (appCtx as any).order?.market?.id ?? (appCtx as any).order?.market_id,
-      shippingAddress: (appCtx as any).order?.shipping_address,
+    const order = (appCtx as any).order
+    const shipments = appCtx.shipments ?? []
+
+    const shipmentSummary = shipments.map((s: any) => ({
+      shipmentId: s?.shipmentId ?? s?.id,
+      shippingMethodId: s?.shippingMethodId ?? s?.shipping_method_id,
+      shippingMethodName: s?.shippingMethodName ?? s?.shipping_method?.name,
+      stockTransfersCount: getShipmentStockTransfers(s).length,
+    }))
+
+    const allTransfers = shipments.flatMap((s: any) =>
+      getShipmentStockTransfers(s),
+    )
+
+    console.log("[Shipping][debug] state", {
+      outOfStockError,
+      shippingMethodError,
+      isActive: accordionCtx?.isActive,
+      status: accordionCtx?.status,
     })
 
-    console.log("[Shipping] shipments:", appCtx.shipments)
-  }, [appCtx, outOfStockError, shippingMethodError])
+    console.log("[Shipping][debug] order", {
+      id: order?.id,
+      market: order?.market?.id ?? order?.market_id,
+      // depending on how the SDK returns it:
+      shippingAddressId:
+        order?.shipping_address?.id ??
+        order?.shippingAddress?.id ??
+        order?.shipping_address_id,
+      shippingCountry:
+        order?.shipping_address?.country_code ??
+        order?.shippingAddress?.country_code,
+      lineItemsCount: order?.line_items?.length ?? order?.lineItems?.length,
+    })
+
+    console.log("[Shipping][debug] shipments summary", shipmentSummary)
+    console.log("[Shipping][debug] stock transfers (raw)", allTransfers)
+  }, [appCtx, accordionCtx, outOfStockError, shippingMethodError])
 
   useEffect(() => {
     if (!appCtx) return
@@ -389,7 +431,6 @@ export const StepShipping: React.FC<Props> = () => {
                           <ButtonWrapper>
                             <Button
                               disabled={!canContinue || isLocalLoader}
-                              // disabled={!canContinue || isLocalLoader}
                               data-testid="save-shipping-button"
                               onClick={handleSave}
                             >
