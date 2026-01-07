@@ -25,47 +25,48 @@ const resources = {
   pt: { translation: translationPT },
   sl: { translation: translationSL },
   nl: { translation: translationNL },
-}
+} as const
 
-i18n
-  .use(LanguageDetector)
-  .use(initReactI18next)
-  .init({
+const supportedLngs = [
+  "en",
+  "it",
+  "de",
+  "pl",
+  "es",
+  "fr",
+  "hr",
+  "hu",
+  "pt",
+  "sl",
+  "nl",
+] as const
+
+const isBrowser = typeof window !== "undefined"
+
+if (!i18n.isInitialized) {
+  // ✅ Only use browser detector in the browser
+  if (isBrowser) {
+    i18n.use(LanguageDetector)
+  }
+
+  i18n.use(initReactI18next).init({
     resources,
-
-    /** 👇 This is key */
+    supportedLngs: [...supportedLngs],
     fallbackLng: "nl",
 
-    supportedLngs: [
-      "en",
-      "it",
-      "de",
-      "pl",
-      "es",
-      "fr",
-      "hr",
-      "hu",
-      "pt",
-      "sl",
-      "nl",
-    ],
+    // ✅ important for nl-NL -> nl
+    load: "languageOnly",
+    nonExplicitSupportedLngs: true,
 
-    interpolation: {
-      escapeValue: false,
-    },
+    interpolation: { escapeValue: false },
 
     detection: {
-      order: [
-        "localStorage",
-        "cookie",
-        "navigator",
-        "htmlTag",
-        "path",
-        "subdomain",
-      ],
-
+      order: ["navigator", "htmlTag", "localStorage", "cookie"],
       caches: ["localStorage", "cookie"],
     },
+
+    react: { useSuspense: false },
   })
+}
 
 export default i18n
