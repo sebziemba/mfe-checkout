@@ -28,7 +28,7 @@
     "mustBeValidGiftCard": "Please enter a valid gift card"
   },
   "orderRecap": {
-    "order_summary": "Order summarytje",
+    "order_summary": "Order summary",
     "cartContains": "Your shopping cart contains {{count}} item",
     "cartContains_other": "Your shopping cart contains {{count}} items",
     "coupon_code": "Coupon code",

@@ -28,18 +28,24 @@ const resources = {
 
 const FORCE_LNG = "nl"
 
-export function initI18n() {
+export async function initI18n(): Promise<void> {
+  // If already initialized elsewhere, still force NL
   if (i18n.isInitialized) {
-    void i18n.changeLanguage(FORCE_LNG)
+    if (i18n.language !== FORCE_LNG) {
+      await i18n.changeLanguage(FORCE_LNG)
+    }
     return
   }
 
-  i18n.use(initReactI18next).init({
+  await i18n.use(initReactI18next).init({
     resources,
     lng: FORCE_LNG,
     fallbackLng: FORCE_LNG,
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
+
+    // 🔑 reduces “init not ready” races
+    initImmediate: false,
   })
 }
 

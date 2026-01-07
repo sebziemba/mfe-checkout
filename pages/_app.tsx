@@ -21,26 +21,19 @@ import "../styles/address-input.css"
 import "../styles/accordion.css"
 
 export default function CheckoutApp({ Component, pageProps }: AppProps) {
-  const [browser, setBrowser] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    initI18n()
-    // hard proof
-    console.log("[APP] i18n.language =", i18n.language)
+    ;(async () => {
+      await initI18n()
+      setReady(true)
 
-    setBrowser(true)
-    loadNewRelicAgent()
-
-    try {
-      pushDebug("APP_BOOT", {
-        href: window.location.href,
-        ua: navigator.userAgent,
-        lang: navigator.language,
-      })
-    } catch {}
+      // proof
+      console.log("[APP] i18n.language =", i18n.language)
+    })()
   }, [])
 
-  if (!browser) return null
+  if (!ready) return null
 
   return (
     <I18nextProvider i18n={i18n}>
