@@ -41,7 +41,7 @@
     "adjustment_amount": "Wijzigingen totaal",
     "giftcard_amount": "Gift card",
     "tax_amount": "BTW",
-    "tax_included_amount": "<style>inclusief</style> BTW",
+    "tax_included_amount": "BTW",
     "shipping_amount": "Verzendkosten",
     "payment_method_amount": "Betaalwijze",
     "subtotal_amount": "Subtotaal",
