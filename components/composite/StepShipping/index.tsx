@@ -130,6 +130,20 @@ export const StepShipping: React.FC<Props> = () => {
 
   useEffect(() => {
     if (!appCtx) return
+
+    // Handig om te zien welke context CL gebruikt
+    console.log("[Shipping] order:", {
+      id: (appCtx as any).order?.id,
+      market:
+        (appCtx as any).order?.market?.id ?? (appCtx as any).order?.market_id,
+      shippingAddress: (appCtx as any).order?.shipping_address,
+    })
+
+    console.log("[Shipping] shipments:", appCtx.shipments)
+  }, [appCtx, outOfStockError, shippingMethodError])
+
+  useEffect(() => {
+    if (!appCtx) return
     const { shipments } = appCtx
     if (shipments.length > 0) {
       setCanContinue(
@@ -153,14 +167,16 @@ export const StepShipping: React.FC<Props> = () => {
 
   const handleSave = async () => {
     if (!appCtx) return
-
     setIsLocalLoader(true)
 
-    const updatedOrder = await appCtx.saveShipments()
-
-    setIsLocalLoader(false)
-    if (gtmCtx?.fireAddShippingInfo) {
-      gtmCtx.fireAddShippingInfo(updatedOrder)
+    try {
+      const updatedOrder = await appCtx.saveShipments()
+      console.log("[Shipping] saveShipments updatedOrder:", updatedOrder)
+      if (gtmCtx?.fireAddShippingInfo) gtmCtx.fireAddShippingInfo(updatedOrder)
+    } catch (e) {
+      console.error("[Shipping] saveShipments error:", e)
+    } finally {
+      setIsLocalLoader(false)
     }
   }
 

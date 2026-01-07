@@ -34,11 +34,11 @@ export const OutOfStock = ({
                     }}
                     components={{
                       WrapperStyle: (
-                        <strong className="text-black border-b border-gray-300 cursor-pointer" />
+                        <strong className="text-black border-b font-normal border-gray-300 cursor-pointer" />
                       ),
                       Link: (
                         <a
-                          data-testid="out-of-stock-cart-link"
+                          data-testid="out-of-stock-cart-link font-medium"
                           href={`${cartUrl}`}
                         />
                       ),

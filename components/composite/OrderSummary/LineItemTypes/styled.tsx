@@ -19,7 +19,7 @@ export const LineItemQty: FC<React.HTMLAttributes<HTMLDivElement>> = (
 ) => (
   <div
     {...props}
-    className="text-xs bg-gray-100 max-w-max py-1 px-2.5 rounded-sm lowercase text-gray-500 font-normal first-letter:uppercase"
+    className="text-xs bg-gray-100 max-w-max py-1 px-2.5 rounded-sm lowercase text-gray-500 font-medium first-letter:uppercase"
   />
 )
 
@@ -37,7 +37,7 @@ export const StyledLineItemSkuCode: FC<
 > = (props) => (
   <LineItemCode
     {...props}
-    className={`text-xxs uppercase text-gray-400 font-normal mb-1 ${props.className || ""}`}
+    className={`text-xxs uppercase text-gray-400 font-medium mb-1 ${props.className || ""}`}
   />
 )
 
