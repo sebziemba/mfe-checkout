@@ -44,7 +44,9 @@ const supportedLngs = [
 const isBrowser = typeof window !== "undefined"
 
 if (!i18n.isInitialized) {
-  // ✅ Only use browser detector in the browser
+  // ⚠️ IMPORTANT:
+  // Only attach the language detector in the browser.
+  // If it runs on the server, it will lock the language to fallback.
   if (isBrowser) {
     i18n.use(LanguageDetector)
   }
@@ -52,20 +54,27 @@ if (!i18n.isInitialized) {
   i18n.use(initReactI18next).init({
     resources,
     supportedLngs: [...supportedLngs],
+
+    // ✅ Fallback should be a single language
     fallbackLng: "nl",
 
-    // ✅ important for nl-NL -> nl
+    // ✅ Makes nl-NL → nl
     load: "languageOnly",
     nonExplicitSupportedLngs: true,
 
-    interpolation: { escapeValue: false },
+    interpolation: {
+      escapeValue: false,
+    },
 
     detection: {
+      // navigator first → real browser language
       order: ["navigator", "htmlTag", "localStorage", "cookie"],
       caches: ["localStorage", "cookie"],
     },
 
-    react: { useSuspense: false },
+    react: {
+      useSuspense: false,
+    },
   })
 }
 
