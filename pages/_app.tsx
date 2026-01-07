@@ -1,6 +1,8 @@
 // pages/_app.tsx
 
+import { initI18n } from "components/data/i18n"
 import { loadNewRelicAgent } from "components/data/NewRelic"
+// pages/_app.tsx
 import type { AppProps } from "next/app"
 import { useEffect, useState } from "react"
 import { BrowserRouter } from "react-router-dom"
@@ -17,14 +19,13 @@ import "../styles/place-order.css"
 import "../styles/step-container.css"
 import "../styles/address-input.css"
 import "../styles/accordion.css"
-
-import "components/data/i18n" // keep this (react-i18next init)
-
 export default function CheckoutApp({ Component, pageProps }: AppProps) {
   const [browser, setBrowser] = useState(false)
 
   useEffect(() => {
+    initI18n() // ✅ runs ONLY in browser
     setBrowser(true)
+
     loadNewRelicAgent()
 
     try {

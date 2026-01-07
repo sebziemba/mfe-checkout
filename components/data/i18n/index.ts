@@ -1,3 +1,4 @@
+// components/data/i18n.ts
 import i18n from "i18next"
 import LanguageDetector from "i18next-browser-languagedetector"
 import translationDE from "public/static/locales/de/common.json"
@@ -25,57 +26,44 @@ const resources = {
   pt: { translation: translationPT },
   sl: { translation: translationSL },
   nl: { translation: translationNL },
-} as const
+}
 
-const supportedLngs = [
-  "en",
-  "it",
-  "de",
-  "pl",
-  "es",
-  "fr",
-  "hr",
-  "hu",
-  "pt",
-  "sl",
-  "nl",
-] as const
+export function initI18n() {
+  if (i18n.isInitialized) return
 
-const isBrowser = typeof window !== "undefined"
+  i18n
+    .use(LanguageDetector)
+    .use(initReactI18next)
+    .init({
+      resources,
+      supportedLngs: [
+        "en",
+        "nl",
+        "it",
+        "de",
+        "pl",
+        "es",
+        "fr",
+        "hr",
+        "hu",
+        "pt",
+        "sl",
+      ],
 
-if (!i18n.isInitialized) {
-  // ⚠️ IMPORTANT:
-  // Only attach the language detector in the browser.
-  // If it runs on the server, it will lock the language to fallback.
-  if (isBrowser) {
-    i18n.use(LanguageDetector)
-  }
+      fallbackLng: "en",
 
-  i18n.use(initReactI18next).init({
-    resources,
-    supportedLngs: [...supportedLngs],
+      // ✅ nl-NL → nl
+      load: "languageOnly",
+      nonExplicitSupportedLngs: true,
 
-    // ✅ Fallback should be a single language
-    fallbackLng: "nl",
+      detection: {
+        order: ["navigator", "htmlTag", "localStorage", "cookie"],
+        caches: ["localStorage", "cookie"],
+      },
 
-    // ✅ Makes nl-NL → nl
-    load: "languageOnly",
-    nonExplicitSupportedLngs: true,
-
-    interpolation: {
-      escapeValue: false,
-    },
-
-    detection: {
-      // navigator first → real browser language
-      order: ["navigator", "htmlTag", "localStorage", "cookie"],
-      caches: ["localStorage", "cookie"],
-    },
-
-    react: {
-      useSuspense: false,
-    },
-  })
+      interpolation: { escapeValue: false },
+      react: { useSuspense: false },
+    })
 }
 
 export default i18n
