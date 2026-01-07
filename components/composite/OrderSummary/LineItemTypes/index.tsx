@@ -45,16 +45,16 @@ export const LineItemTypes: React.FC<Props> = ({ type, hideItemCodes }) => {
     <LineItem type={type}>
       <LineItemWrapper data-testid={`line-items-${type}`}>
         <LineItemImage
-          width={85}
+          width={100}
           className="self-start p-1 bg-white border rounded-sm"
         />
         <LineItemDescription>
           {!hideItemCodes && <StyledLineItemSkuCode type={CODE_LOOKUP[type]} />}
           <LineItemTitle>
-            <LineItemName className="font-normal" />
+            <LineItemName className="font-medium" />
             <LineItemAmount
               data-testid="line-item-amount"
-              className="pl-2 text-lg font-normal"
+              className="pl-2 text-lg font-medium"
             />
           </LineItemTitle>
           <StyledLineItemOptions showAll showName={true} className="options">

@@ -18,7 +18,7 @@ export const Step: FC<StepProps> = ({
       className={classNames(
         "relative flex items-center",
         {
-          "font-bold text-black": $isActive,
+          "font-medium text-black": $isActive,
           "text-gray-400/50 pointer-events-none": $isLocked && !$isActive,
           "cursor-pointer": !($isLocked && !$isActive),
         },

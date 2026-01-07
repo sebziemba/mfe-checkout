@@ -38,10 +38,10 @@ export const StepHeaderCustomer: React.FC<Props> = ({ step }) => {
   } = appCtx
 
   const recapText = () => {
-    if (
-      (!hasShippingAddress && !hasBillingAddress) ||
-      accordionCtx.status === "edit"
-    ) {
+    const isCustomerAddressSet = isShipmentRequired
+      ? hasShippingAddress
+      : hasBillingAddress
+    if (!isCustomerAddressSet || accordionCtx.status === "edit") {
       return (
         <>
           <p data-testid="customer-addresses-title">

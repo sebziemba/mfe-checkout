@@ -311,7 +311,7 @@ export const OrderSummary: React.FC<Props> = ({
             </RecapLineItemTotal>
             <TotalAmount
               data-testid="total-amount"
-              className="text-xl font-normal"
+              className="text-xl font-medium"
             />
           </RecapLineTotal>
 

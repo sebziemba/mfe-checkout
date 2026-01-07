@@ -187,10 +187,9 @@ const Checkout: React.FC<Props> = ({
                   step="Customer"
                   steps={steps}
                   isStepDone={
-                    (ctx.isShipmentRequired &&
-                      ctx.hasShippingAddress &&
-                      ctx.hasBillingAddress) ||
-                    (!ctx.isShipmentRequired && ctx.hasBillingAddress)
+                    ctx.isShipmentRequired
+                      ? ctx.hasShippingAddress
+                      : ctx.hasBillingAddress
                   }
                 >
                   <AccordionItem
