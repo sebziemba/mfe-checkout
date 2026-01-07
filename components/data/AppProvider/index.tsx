@@ -71,7 +71,10 @@ const initialState: AppStateData = {
   hasPaymentMethod: false,
   isPaymentRequired: true,
   isCreditCard: false,
+
+  // HARD LOCK: NL only shipping
   shippingCountryCodeLock: "NL",
+
   isComplete: false,
   returnUrl: "",
   cartUrl: undefined,
@@ -111,26 +114,78 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     domain,
   })
 
-  const getOrder = (order: Order) => {
-    orderRef.current = order
-    setOrder(order)
+  const NL = "NL" as const
+
+  /**
+   * Fundamental normalization rules for your new flow:
+   * 1) Shipping country must be NL only (order-level lock).
+   * 2) Billing is optional in UI, but if missing it must equal shipping.
+   *    We enforce that at the order source-of-truth.
+   */
+  const enforceNlShippingLock = async (o: Order): Promise<Order> => {
+    // Some SDK typings may not include this field; keep it safe.
+    const current = (o as any)?.shipping_country_code_lock ?? null
+    if (current === NL) return o
+
+    return await cl.orders.update({
+      type: "orders",
+      id: o.id,
+      shipping_country_code_lock: NL,
+    } as any)
   }
 
-  const fetchInitialOrder = async (orderId?: string, accessToken?: string) => {
-    if (!orderId || !accessToken) {
-      return
+  const ensureBillingFromShipping = async (o: Order): Promise<Order> => {
+    const hasShip = !!(o as any)?.shipping_address?.id
+    const hasBill = !!(o as any)?.billing_address?.id
+    if (hasShip && !hasBill) {
+      // Commerce Layer trigger: clone billing = shipping
+      return await cl.orders.update({
+        type: "orders",
+        id: o.id,
+        _billing_address_same_as_shipping: true,
+      } as any)
     }
+    return o
+  }
+
+  const normalizeOrderForAddresses = async (o: Order): Promise<Order> => {
+    // Always enforce NL lock first, then ensure billing
+    const locked = await enforceNlShippingLock(o)
+    const normalized = await ensureBillingFromShipping(locked)
+    return normalized
+  }
+
+  const getOrder = (o: Order) => {
+    orderRef.current = o
+    setOrder(o)
+  }
+
+  const getOrderFromRef = async () => {
+    return orderRef.current || (await fetchOrder(cl, orderId))
+  }
+
+  const fetchInitialOrder = async (oid?: string, token?: string) => {
+    if (!oid || !token) return
+
     dispatch({ type: ActionType.START_LOADING })
-    const order = await getOrderFromRef()
+
+    // fetch + normalize once on initial load
+    const rawOrder = await getOrderFromRef()
+    const normalizedOrder = await normalizeOrderForAddresses(rawOrder)
 
     const { shipments, ...addressInfos } =
       await checkAndSetDefaultAddressForOrder({
         cl,
-        order,
+        order: normalizedOrder,
       })
 
+    const orderWithShipments =
+      shipments != null
+        ? ({ ...normalizedOrder, shipments } as Order)
+        : normalizedOrder
+
     const others = calculateSettings(
-      shipments != null ? { ...order, shipments: shipments } : order,
+      orderWithShipments,
       isShipmentRequired,
       isGuest,
       undefined,
@@ -139,7 +194,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     dispatch({
       type: ActionType.SET_ORDER,
       payload: {
-        order,
+        order: normalizedOrder,
         others: {
           isShipmentRequired,
           ...others,
@@ -148,7 +203,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       },
     })
 
-    await changeLanguage(order.language_code ?? "en")
+    await changeLanguage(normalizedOrder.language_code ?? "en")
   }
 
   const setCustomerEmail = (email: string) => {
@@ -158,31 +213,37 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     })
   }
 
-  const setAddresses = async (order?: Order) => {
+  const setAddresses = async (o?: Order) => {
     dispatch({ type: ActionType.START_LOADING })
-    const currentOrder = order ?? (await getOrderFromRef())
+
+    // Use returned order from SaveAddressesButton if present; otherwise refetch.
+    const currentOrder = o ?? (await getOrderFromRef())
+
+    // Normalize: NL lock + billing-from-shipping if missing
+    const normalizedOrder = await normalizeOrderForAddresses(currentOrder)
 
     const others = calculateSettings(
-      currentOrder,
+      normalizedOrder,
       isShipmentRequired,
       // FIX We are using customer addresses saved in reducer because
       // we don't receive them from fetchOrder
       isGuest,
       state.customerAddresses,
     )
+
     setTimeout(() => {
       dispatch({
         type: ActionType.SET_ADDRESSES,
         payload: {
-          order: currentOrder,
+          order: normalizedOrder,
           others,
         },
       })
     }, 100)
   }
 
-  const setCouponOrGiftCard = async (order?: Order) => {
-    const currentOrder = order ?? (await getOrderFromRef())
+  const setCouponOrGiftCard = async (o?: Order) => {
+    const currentOrder = o ?? (await getOrderFromRef())
     if (state.order) {
       dispatch({ type: ActionType.START_LOADING })
 
@@ -206,7 +267,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     shipmentId: string
     order?: Order
   }) => {
-    // dispatch({ type: ActionType.START_LOADING })
     // TODO Remove after fixing components
     const currentOrder = params.order ?? (await fetchOrder(cl, orderId))
 
@@ -230,9 +290,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     })
   }
 
-  const autoSelectShippingMethod = async (order?: Order) => {
+  const autoSelectShippingMethod = async (o?: Order) => {
     dispatch({ type: ActionType.START_LOADING })
-    const currentOrder = order ?? (await fetchOrder(cl, orderId))
+    const currentOrder = o ?? (await fetchOrder(cl, orderId))
 
     const others = calculateSettings(
       currentOrder,
@@ -290,21 +350,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     })
   }
 
-  const placeOrder = async (order?: Order) => {
+  const placeOrder = async (o?: Order) => {
     dispatch({ type: ActionType.START_LOADING })
-    if (order && order.customer_email != null) {
-      setCustomerEmail(order.customer_email)
+    if (o && o.customer_email != null) {
+      setCustomerEmail(o.customer_email)
     }
-    const currentOrder = order ?? (await getOrderFromRef())
+    const currentOrder = o ?? (await getOrderFromRef())
 
     dispatch({
       type: ActionType.PLACE_ORDER,
       payload: { order: currentOrder },
     })
-  }
-
-  const getOrderFromRef = async () => {
-    return orderRef.current || (await fetchOrder(cl, orderId))
   }
 
   useEffect(() => {
