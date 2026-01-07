@@ -135,7 +135,7 @@ export const CouponOrGiftCard: React.FC<Props> = ({
                     onClick={handleSubmit}
                     data-testid="remove_coupon"
                     type="coupon"
-                    label="Remove"
+                    label="Verwijderen"
                   />
                 )}
               </span>
@@ -159,7 +159,7 @@ export const CouponOrGiftCard: React.FC<Props> = ({
                     data-testid="remove_giftcard"
                     type="gift_card"
                     className=""
-                    label="Remove"
+                    label="Verwijderen"
                   />
                 )}
               </span>

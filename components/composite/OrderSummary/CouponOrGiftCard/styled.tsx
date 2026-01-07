@@ -33,7 +33,7 @@ export const StyledGiftCardOrCouponRemoveButton: FC<
 > = (props) => (
   <GiftCardOrCouponRemoveButton
     {...props}
-    className={`ml-2 text-sm font-bold text-primary border-b leading-none border-black/10 transition ease-in duration-200 hover:border-black/50 hover:text-primary-dark focus:outline-hidden ${props.className || ""}`}
+    className={`ml-2 text-sm font-normal text-primary border-b leading-none border-black/30 transition ease-in duration-200 hover:border-black hover:text-primary-dark focus:outline-hidden ${props.className || ""}`}
   />
 )
 

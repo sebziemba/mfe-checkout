@@ -219,25 +219,54 @@ export const OrderSummary: React.FC<Props> = ({
             }}
           </PaymentMethodAmount>
 
-          {/* ✅ VAT line: show immediately (derived 21%) until CL calculates */}
+          {/* ✅ VAT line: use CL tax when available, otherwise derive from TOTAL so discounts affect it */}
           <TaxesAmount>
             {(tax: any) => {
-              return (
-                <SubTotalAmount>
-                  {(sub: any) => {
-                    const grossCents = Number(sub?.priceCents || 0)
+              // If CL calculated taxes, always trust CL.
+              if (isTaxCalculated) {
+                const taxCents = Number(tax?.priceCents || 0)
+                return (
+                  <RecapLine>
+                    <RecapLineItem>
+                      <Trans
+                        i18nKey={
+                          appCtx.taxIncluded
+                            ? "orderRecap.tax_included_amount"
+                            : "orderRecap.tax_amount"
+                        }
+                        components={{
+                          style: (
+                            <span
+                              className={
+                                appCtx.taxIncluded
+                                  ? "text-gray-500 font-normal"
+                                  : ""
+                              }
+                            />
+                          ),
+                        }}
+                      />
+                    </RecapLineItem>
 
-                    // If CL calculated taxes, use CL's number.
-                    // If not calculated yet, derive 21% VAT from subtotal.
-                    const taxCents = isTaxCalculated
-                      ? Number(tax?.priceCents || 0)
-                      : appCtx.taxIncluded
-                        ? Math.max(
-                            0,
-                            grossCents -
-                              Math.round(grossCents / (1 + VAT_RATE)),
-                          )
-                        : Math.round(grossCents * VAT_RATE)
+                    <div data-testid="tax-amount">
+                      {fmt.format(taxCents / 100)}
+                    </div>
+                  </RecapLine>
+                )
+              }
+
+              // Otherwise derive VAT from TOTAL so discounts are reflected.
+              return (
+                <TotalAmount>
+                  {(tot: any) => {
+                    const totalCents = Number(tot?.priceCents || 0)
+
+                    const taxCents = appCtx.taxIncluded
+                      ? Math.max(
+                          0,
+                          totalCents - Math.round(totalCents / (1 + VAT_RATE)),
+                        )
+                      : Math.round(totalCents * VAT_RATE) // if your totals are net before tax
 
                     return (
                       <RecapLine>
@@ -248,21 +277,6 @@ export const OrderSummary: React.FC<Props> = ({
                                 ? "orderRecap.tax_included_amount"
                                 : "orderRecap.tax_amount"
                             }
-                            components={
-                              isTaxCalculated
-                                ? {
-                                    style: (
-                                      <span
-                                        className={
-                                          appCtx.taxIncluded
-                                            ? "text-gray-500 font-normal"
-                                            : ""
-                                        }
-                                      />
-                                    ),
-                                  }
-                                : {}
-                            }
                           />
                         </RecapLineItem>
 
@@ -272,7 +286,7 @@ export const OrderSummary: React.FC<Props> = ({
                       </RecapLine>
                     )
                   }}
-                </SubTotalAmount>
+                </TotalAmount>
               )
             }}
           </TaxesAmount>

@@ -1,4 +1,5 @@
-import i18n, { use } from "i18next"
+import i18n from "i18next"
+import LanguageDetector from "i18next-browser-languagedetector"
 import translationDE from "public/static/locales/de/common.json"
 import translationEN from "public/static/locales/en/common.json"
 import translationES from "public/static/locales/es/common.json"
@@ -12,60 +13,59 @@ import translationPT from "public/static/locales/pt/common.json"
 import translationSL from "public/static/locales/sl/common.json"
 import { initReactI18next } from "react-i18next"
 
-const languages = [
-  "en",
-  "it",
-  "de",
-  "pl",
-  "es",
-  "fr",
-  "hr",
-  "hu",
-  "pt",
-  "sl",
-  "nl",
-]
-
 const resources = {
-  en: {
-    translation: translationEN,
-  },
-  it: {
-    translation: translationIT,
-  },
-  de: {
-    translation: translationDE,
-  },
-  pl: {
-    translation: translationPL,
-  },
-  es: {
-    translation: translationES,
-  },
-  fr: {
-    translation: translationFR,
-  },
-  hr: {
-    translation: translationHR,
-  },
-  hu: {
-    translation: translationHU,
-  },
-  pt: {
-    translation: translationPT,
-  },
-  sl: {
-    translation: translationSL,
-  },
-  nl: {
-    translation: translationNL,
-  },
+  en: { translation: translationEN },
+  it: { translation: translationIT },
+  de: { translation: translationDE },
+  pl: { translation: translationPL },
+  es: { translation: translationES },
+  fr: { translation: translationFR },
+  hr: { translation: translationHR },
+  hu: { translation: translationHU },
+  pt: { translation: translationPT },
+  sl: { translation: translationSL },
+  nl: { translation: translationNL },
 }
 
-use(initReactI18next).init({
-  resources,
-  lng: languages[0],
-  fallbackLng: languages,
-})
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources,
+
+    /** 👇 This is key */
+    fallbackLng: "nl",
+
+    supportedLngs: [
+      "en",
+      "it",
+      "de",
+      "pl",
+      "es",
+      "fr",
+      "hr",
+      "hu",
+      "pt",
+      "sl",
+      "nl",
+    ],
+
+    interpolation: {
+      escapeValue: false,
+    },
+
+    detection: {
+      order: [
+        "localStorage",
+        "cookie",
+        "navigator",
+        "htmlTag",
+        "path",
+        "subdomain",
+      ],
+
+      caches: ["localStorage", "cookie"],
+    },
+  })
 
 export default i18n
