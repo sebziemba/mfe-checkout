@@ -57,8 +57,8 @@ export function initI18n() {
       nonExplicitSupportedLngs: true,
 
       detection: {
-        order: ["navigator", "htmlTag", "localStorage", "cookie"],
-        caches: ["localStorage", "cookie"],
+        order: ["navigator", "htmlTag"],
+        caches: [], // ⛔️ disable cache completely
       },
 
       interpolation: { escapeValue: false },

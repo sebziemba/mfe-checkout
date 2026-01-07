@@ -147,7 +147,7 @@ export const OrderSummary: React.FC<Props> = ({
                 <RecapLine>
                   <RecapLineItem>
                     {t("orderRecap.subtotal_amount")}{" "}
-                    {appCtx.taxIncluded ? "(excl. BTW)" : ""}
+                    {appCtx.taxIncluded ? "" : ""}
                   </RecapLineItem>
                   <div data-testid="subtotal-amount">
                     {fmt.format(netCents / 100)}

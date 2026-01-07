@@ -41,7 +41,7 @@
     "adjustment_amount": "Adjustments total",
     "giftcard_amount": "Gift card",
     "tax_amount": "Tax",
-    "tax_included_amount": "Tax <style>included</style>",
+    "tax_included_amount": "Tax",
     "shipping_amount": "Shipping",
     "payment_method_amount": "Payment method",
     "subtotal_amount": "Subtotal",
