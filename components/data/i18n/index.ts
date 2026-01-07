@@ -1,5 +1,4 @@
 import i18n from "i18next"
-import LanguageDetector from "i18next-browser-languagedetector"
 import translationDE from "public/static/locales/de/common.json"
 import translationEN from "public/static/locales/en/common.json"
 import translationES from "public/static/locales/es/common.json"
@@ -27,18 +26,25 @@ const resources = {
   sl: { translation: translationSL },
 }
 
+const FORCE_LNG = "nl"
+
 export function initI18n() {
-  if (!i18n.isInitialized) {
-    i18n.use(initReactI18next).init({
-      resources,
-      lng: "nl",
-      fallbackLng: "nl",
-      interpolation: { escapeValue: false },
-      react: { useSuspense: false },
-    })
-  } else {
-    void i18n.changeLanguage("nl")
+  // If someone else initialized i18next, we still force Dutch.
+  if (i18n.isInitialized) {
+    if (i18n.language !== FORCE_LNG) {
+      void i18n.changeLanguage(FORCE_LNG)
+    }
+    return
   }
+
+  i18n.use(initReactI18next).init({
+    resources,
+    lng: FORCE_LNG,
+    fallbackLng: FORCE_LNG,
+
+    interpolation: { escapeValue: false },
+    react: { useSuspense: false },
+  })
 }
 
 export default i18n
