@@ -1,12 +1,8 @@
 import CheckoutSkeleton from "components/composite/CheckoutSkeleton"
 import { RetryError } from "components/composite/RetryError"
 import { useSettingsOrInvalid } from "components/hooks/useSettingsOrInvalid"
-import i18n from "i18next"
 import type { NextPage } from "next"
 import dynamic from "next/dynamic"
-
-console.log("I18N FROM COMPONENT:", i18n)
-console.log("SAME INSTANCE?", (window as any).__I18N_INSTANCE__ === i18n)
 
 const DynamicCheckoutContainer = dynamic(
   () => import("components/composite/CheckoutContainer"),
