@@ -62,7 +62,7 @@ export function initI18n() {
         "sl",
       ],
 
-      fallbackLng: "en",
+      fallbackLng: "nl",
 
       load: "languageOnly",
       nonExplicitSupportedLngs: true,
