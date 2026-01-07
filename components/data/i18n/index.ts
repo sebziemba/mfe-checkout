@@ -1,9 +1,4 @@
 import i18n from "i18next"
-
-;(window as any).__I18N_INSTANCE__ = i18n
-
-console.log("I18N INIT FILE:", i18n)
-
 import LanguageDetector from "i18next-browser-languagedetector"
 import translationDE from "public/static/locales/de/common.json"
 import translationEN from "public/static/locales/en/common.json"
@@ -33,7 +28,7 @@ const resources = {
 }
 
 function getInitialLanguage() {
-  if (typeof navigator === "undefined") return "en"
+  if (typeof navigator === "undefined") return "nl"
 
   // nl-NL → nl
   return navigator.language.split("-")[0]
