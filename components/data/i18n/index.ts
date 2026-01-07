@@ -1,4 +1,3 @@
-// components/data/i18n.ts
 import i18n from "i18next"
 import LanguageDetector from "i18next-browser-languagedetector"
 import translationDE from "public/static/locales/de/common.json"
@@ -16,6 +15,7 @@ import { initReactI18next } from "react-i18next"
 
 const resources = {
   en: { translation: translationEN },
+  nl: { translation: translationNL },
   it: { translation: translationIT },
   de: { translation: translationDE },
   pl: { translation: translationPL },
@@ -25,17 +25,29 @@ const resources = {
   hu: { translation: translationHU },
   pt: { translation: translationPT },
   sl: { translation: translationSL },
-  nl: { translation: translationNL },
+}
+
+function getInitialLanguage() {
+  if (typeof navigator === "undefined") return "en"
+
+  // nl-NL → nl
+  return navigator.language.split("-")[0]
 }
 
 export function initI18n() {
   if (i18n.isInitialized) return
+
+  const initialLng = getInitialLanguage()
 
   i18n
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
       resources,
+
+      // 🔥 THIS IS THE KEY
+      lng: initialLng,
+
       supportedLngs: [
         "en",
         "nl",
@@ -52,18 +64,20 @@ export function initI18n() {
 
       fallbackLng: "en",
 
-      // ✅ nl-NL → nl
       load: "languageOnly",
       nonExplicitSupportedLngs: true,
 
       detection: {
-        order: ["navigator", "htmlTag"],
-        caches: [], // ⛔️ disable cache completely
+        order: ["navigator"],
+        caches: [], // no overrides
       },
 
       interpolation: { escapeValue: false },
       react: { useSuspense: false },
     })
+
+  // 🔍 hard proof in console
+  console.log("[i18n] initialized with:", i18n.language)
 }
 
 export default i18n
