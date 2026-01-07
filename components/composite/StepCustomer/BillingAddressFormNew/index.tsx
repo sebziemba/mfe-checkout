@@ -86,11 +86,10 @@ export const BillingAddressFormNew: React.FC<Props> = ({
       </Grid>
       <Grid>
         <AddressInputGroup
-          fieldName="billing_address_state_code"
+          fieldName="billing_address_phone"
           resource="billing_address"
-          states={states}
-          type="text"
-          value={billingAddress?.state_code || ""}
+          type="tel"
+          value={billingAddress?.phone || ""}
         />
         <AddressInputGroup
           fieldName="billing_address_zip_code"
@@ -99,12 +98,6 @@ export const BillingAddressFormNew: React.FC<Props> = ({
           value={billingAddress?.zip_code || ""}
         />
       </Grid>
-      <AddressInputGroup
-        fieldName="billing_address_phone"
-        resource="billing_address"
-        type="tel"
-        value={billingAddress?.phone || ""}
-      />
       {(requiresBillingInfo || optionalBillingInfo) && (
         <AddressInputGroup
           fieldName="billing_address_billing_info"

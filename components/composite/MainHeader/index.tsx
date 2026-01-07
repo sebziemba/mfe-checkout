@@ -27,7 +27,7 @@ export const MainHeader: FC<Props> = ({
           <h1 className="text-black font-semibold text-xl md:text-3xl">
             {t("general.checkoutTitle")}
           </h1>
-          <p className="font-semibold text-sm md:text-base text-gray-400">
+          <p className="font-normal text-sm md:text-base text-gray-400">
             #{orderNumber}
           </p>
         </div>

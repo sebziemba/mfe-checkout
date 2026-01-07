@@ -122,8 +122,9 @@
     "billing_address_state_code": "Provincie/Staat",
     "billing_address_state_code_placeholder": "Selecteer een provincie/staat",
     "billing_address_zip_code": "Postcode",
-    "billing_address_phone": "Telefoon",
+    "billing_address_phone": "Telefoonnummer",
     "billing_address_billing_info": "Facturatiegegevens",
+    "use_different_billing_address": "Gebruik andere factuurgegevens",
     "ship_to_different_address": "Verzenden naar ander adres",
     "shipping_address_title": "Verzendadres",
     "shipping_address_first_name": "Voornaam",
@@ -132,12 +133,12 @@
     "shipping_address_line_1": "Adresregel 1",
     "shipping_address_line_2": "Adresregel 2",
     "shipping_address_city": "Stad",
-    "shipping_address_country_code": "Land/Regio",
-    "shipping_address_country_code_placeholder": "Selecteer een land/regio",
+    "shipping_address_country_code": "Land",
+    "shipping_address_country_code_placeholder": "Selecteer een land",
     "shipping_address_state_code": "Provincie/Staat",
     "shipping_address_state_code_placeholder": "Selecteer een provincie/staat",
     "shipping_address_zip_code": "Postcode",
-    "shipping_address_phone": "Telefoon"
+    "shipping_address_phone": "Telefoonnummer"
   },
   "stepComplete": {
     "title": "Bedankt voor uw bestelling!",

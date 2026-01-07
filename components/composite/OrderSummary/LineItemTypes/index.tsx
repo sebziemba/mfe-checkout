@@ -51,10 +51,10 @@ export const LineItemTypes: React.FC<Props> = ({ type, hideItemCodes }) => {
         <LineItemDescription>
           {!hideItemCodes && <StyledLineItemSkuCode type={CODE_LOOKUP[type]} />}
           <LineItemTitle>
-            <LineItemName className="font-bold" />
+            <LineItemName className="font-normal" />
             <LineItemAmount
               data-testid="line-item-amount"
-              className="pl-2 text-lg font-extrabold"
+              className="pl-2 text-lg font-normal"
             />
           </LineItemTitle>
           <StyledLineItemOptions showAll showName={true} className="options">
