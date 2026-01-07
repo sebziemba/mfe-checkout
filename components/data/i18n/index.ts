@@ -27,58 +27,18 @@ const resources = {
   sl: { translation: translationSL },
 }
 
-function getInitialLanguage() {
-  if (typeof navigator === "undefined") return "nl"
-
-  // nl-NL → nl
-  return navigator.language.split("-")[0]
-}
-
 export function initI18n() {
-  const initialLng = getInitialLanguage()
-
-  // ✅ If someone else already initialized i18n (e.g. a dependency),
-  // force the language to what we want.
-  if (i18n.isInitialized) {
-    if (i18n.language !== initialLng) {
-      void i18n.changeLanguage(initialLng)
-    }
-    return
-  }
-
-  i18n
-    .use(LanguageDetector)
-    .use(initReactI18next)
-    .init({
+  if (!i18n.isInitialized) {
+    i18n.use(initReactI18next).init({
       resources,
-      lng: initialLng,
-
-      supportedLngs: [
-        "en",
-        "nl",
-        "it",
-        "de",
-        "pl",
-        "es",
-        "fr",
-        "hr",
-        "hu",
-        "pt",
-        "sl",
-      ],
-
+      lng: "nl",
       fallbackLng: "nl",
-      load: "languageOnly",
-      nonExplicitSupportedLngs: true,
-
-      detection: {
-        order: ["navigator"],
-        caches: [],
-      },
-
       interpolation: { escapeValue: false },
       react: { useSuspense: false },
     })
+  } else {
+    void i18n.changeLanguage("nl")
+  }
 }
 
 export default i18n
