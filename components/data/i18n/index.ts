@@ -35,17 +35,22 @@ function getInitialLanguage() {
 }
 
 export function initI18n() {
-  if (i18n.isInitialized) return
-
   const initialLng = getInitialLanguage()
+
+  // ✅ If someone else already initialized i18n (e.g. a dependency),
+  // force the language to what we want.
+  if (i18n.isInitialized) {
+    if (i18n.language !== initialLng) {
+      void i18n.changeLanguage(initialLng)
+    }
+    return
+  }
 
   i18n
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
       resources,
-
-      // 🔥 THIS IS THE KEY
       lng: initialLng,
 
       supportedLngs: [
@@ -63,21 +68,17 @@ export function initI18n() {
       ],
 
       fallbackLng: "nl",
-
       load: "languageOnly",
       nonExplicitSupportedLngs: true,
 
       detection: {
         order: ["navigator"],
-        caches: [], // no overrides
+        caches: [],
       },
 
       interpolation: { escapeValue: false },
       react: { useSuspense: false },
     })
-
-  // 🔍 hard proof in console
-  console.log("[i18n] initialized with:", i18n.language)
 }
 
 export default i18n
