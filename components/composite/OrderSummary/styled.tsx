@@ -10,7 +10,7 @@ export const SummaryHeader: FC<React.HTMLAttributes<HTMLDivElement>> = (
 
 export const SummaryTitle: FC<React.HTMLAttributes<HTMLHeadingElement>> = (
   props,
-) => <h2 {...props} className="text-4xl text-black font-title" />
+) => <h2 {...props} className="text-[44px] text-neutral-950 font-title" />
 
 export const SummarySubTitle: FC<React.HTMLAttributes<HTMLParagraphElement>> = (
   props,
