@@ -17,6 +17,7 @@ import {
   Fragment,
   type SetStateAction,
   useEffect,
+  useMemo,
   useState,
 } from "react"
 import { useTranslation } from "react-i18next"
@@ -48,6 +49,13 @@ interface Props {
 
 type AddressTypeEnum = "shipping" | "billing"
 
+/**
+ * SHIPPING FIRST.
+ * Toggle means: "Use a different billing address".
+ *
+ * IMPORTANT: BillingAddressForm is ALWAYS mounted (sometimes hidden),
+ * otherwise SaveAddressesButton / CL internals often don't allow progressing.
+ */
 export const CheckoutCustomerAddresses: React.FC<Props> = ({
   billingAddress,
   shippingAddress,
@@ -61,23 +69,22 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
   // shippingCountryCodeLock,
   shipToDifferentAddress,
   setShipToDifferentAddress,
-  openShippingAddress,
-  disabledShipToDifferentAddress,
+  // openShippingAddress, // no longer used to affect shipping based on billing
+  // disabledShipToDifferentAddress, // no longer relevant for billing toggle
   handleSave,
 }: Props) => {
   const { t } = useTranslation()
 
   /**
-   * NOTE:
-   * We are reusing the existing prop/state name `shipToDifferentAddress`
-   * but UI-wise this toggle now means "Use a different billing address".
-   * (Shipping is the primary address shown first.)
+   * We re-use the existing prop/state name `shipToDifferentAddress`
+   * but UI-wise this now means "Use a different BILLING address".
    */
   const billToDifferentAddress = shipToDifferentAddress
 
-  const [billingAddressFill, setBillingAddressFill] = useState(billingAddress)
+  const [billingAddressFill, setBillingAddressFill] =
+    useState<NullableType<Address>>(billingAddress)
   const [shippingAddressFill, setShippingAddressFill] =
-    useState(shippingAddress)
+    useState<NullableType<Address>>(shippingAddress)
 
   const [showBillingAddressForm, setShowBillingAddressForm] = useState<boolean>(
     isUsingNewBillingAddress,
@@ -93,8 +100,17 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     isUsingNewShippingAddress,
   )
 
-  // When user toggles "different billing" ON and there is no address book,
-  // show billing form; if addresses were same, reset billing so they can fill it.
+  // keep local fills in sync if props change
+  useEffect(() => {
+    setBillingAddressFill(billingAddress)
+  }, [billingAddress])
+
+  useEffect(() => {
+    setShippingAddressFill(shippingAddress)
+  }, [shippingAddress])
+
+  // If user toggles "different billing" ON and they don't have an address book,
+  // show the billing form; if addresses were same, reset billing so they can fill it.
   useEffect(() => {
     if (billToDifferentAddress && !hasCustomerAddresses) {
       if (hasSameAddresses) {
@@ -104,12 +120,20 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
       setMountBillingAddressForm(true)
     }
 
-    // When toggling OFF, hide billing form (billing becomes same as shipping).
+    // When toggling OFF, hide billing form UI (billing becomes same as shipping).
     if (!billToDifferentAddress) {
       setMountBillingAddressForm(false)
       setShowBillingAddressForm(false)
     }
   }, [billToDifferentAddress, hasCustomerAddresses, hasSameAddresses])
+
+  const noopOpenShippingAddress = (_: any) => {}
+
+  // When billing is NOT different, the billing form should effectively use shipping data
+  // so the SaveAddressesButton becomes enabled and CL sees billing as present.
+  const billingAddressForForm = useMemo(() => {
+    return billToDifferentAddress ? billingAddressFill : shippingAddressFill
+  }, [billToDifferentAddress, billingAddressFill, shippingAddressFill])
 
   const handleScroll = (type: AddressTypeEnum) => {
     const tab = document
@@ -133,7 +157,6 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
   }
 
   const handleToggleBilling = () => {
-    // Toggle means "use different billing address"
     const next = !billToDifferentAddress
     setShipToDifferentAddress(next)
 
@@ -161,8 +184,6 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     <Fragment>
       <AddressSectionEmail readonly emailAddress={emailAddress as string} />
 
-      {/* Keep the CL container in place; we keep passing the boolean through.
-          (Later you can rename this prop across the app.) */}
       <AddressesContainer shipToDifferentAddress={billToDifferentAddress}>
         {/* 1) SHIPPING FIRST */}
         {isShipmentRequired && (
@@ -242,7 +263,7 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
 
         {/* 2) TOGGLE: optional different BILLING */}
         <Toggle
-          disabled={disabledShipToDifferentAddress}
+          disabled={false}
           data-testid="button-bill-to-different-address"
           data-status={billToDifferentAddress}
           label={
@@ -253,7 +274,7 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
           onChange={handleToggleBilling}
         />
 
-        {/* 3) BILLING only if toggled ON */}
+        {/* 3) BILLING UI only when toggled ON */}
         <div className={billToDifferentAddress ? "mt-2" : "hidden"}>
           <AddressSectionTitle data-testid="billing-address">
             <>{t("addressForm.billing_address_title")}</>
@@ -272,13 +293,12 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
                       <CustomerAddressCard
                         addressType="billing"
                         deselect={showBillingAddressForm}
-                        onSelect={() => {
-                          // Billing selection: do NOT run shipping lock logic here.
+                        onSelect={() =>
                           localStorage.setItem(
                             "_save_billing_address_to_customer_address_book",
                             "false",
                           )
-                        }}
+                        }
                       />
                     </BillingAddressContainer>
                   </GridContainer>
@@ -309,8 +329,8 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
                   {mountBillingAddressForm || !hasCustomerAddresses ? (
                     <>
                       <BillingAddressFormNew
-                        billingAddress={billingAddressFill}
-                        openShippingAddress={openShippingAddress}
+                        billingAddress={billingAddressForForm}
+                        openShippingAddress={noopOpenShippingAddress}
                       />
                       <AddressFormBottom
                         addressType="billing"
@@ -326,6 +346,19 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
             </div>
           </div>
         </div>
+
+        {/* 4) HIDDEN BILLING FORM: ALWAYS mounted when toggle is OFF
+            This is what makes SaveAddressesButton / CL validation happy. */}
+        {!billToDifferentAddress && (
+          <div className="hidden">
+            <BillingAddressForm autoComplete="on" errorClassName="hasError">
+              <BillingAddressFormNew
+                billingAddress={billingAddressForForm}
+                openShippingAddress={noopOpenShippingAddress}
+              />
+            </BillingAddressForm>
+          </div>
+        )}
 
         {/* Save */}
         <AddressSectionSaveForm>
