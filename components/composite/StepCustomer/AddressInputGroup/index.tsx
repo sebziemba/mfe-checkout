@@ -99,6 +99,7 @@ export const AddressInputGroup: React.FC<Props> = ({
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
     if (isCountry && fieldName === "billing_address_country_code") {
       const countryCode = event.target.value
+
       openShippingAddress?.(
         evaluateShippingToggle({ countryCode, shippingCountryCodeLock }),
       )
@@ -120,7 +121,6 @@ export const AddressInputGroup: React.FC<Props> = ({
             }}
             onChange={handleChange}
             countries={countries}
-            required={required} // ✅ FIX: forward required
             value={
               shippingCountryCodeLock &&
               fieldName === "shipping_address_country_code"
@@ -138,7 +138,6 @@ export const AddressInputGroup: React.FC<Props> = ({
         </>
       )
     }
-
     if (isState) {
       return (
         <>
@@ -156,13 +155,11 @@ export const AddressInputGroup: React.FC<Props> = ({
             states={states}
             name={fieldName}
             value={value}
-            required={required} // ✅ FIX: forward required
           />
           <Label htmlFor={fieldName}>{label}</Label>
         </>
       )
     }
-
     return (
       <>
         <StyledAddressInput

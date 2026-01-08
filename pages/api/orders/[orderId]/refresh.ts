@@ -7,8 +7,11 @@ function env(name: string) {
 }
 
 function clApiBase() {
-  const slug = env("CL_ORGANIZATION") // you said CL_ORGANIZATION == CL_SLUG, fine
-  return `https://${slug}.commercelayer.io/api`
+  const slug =
+    process.env.CL_SLUG?.trim() || process.env.CL_ORGANIZATION?.trim() || ""
+  if (!slug)
+    throw new Error("Missing env: CL_SLUG (or CL_ORGANIZATION as slug)")
+  return { slug, base: `https://${slug}.commercelayer.io/api` }
 }
 
 async function mintIntegrationToken() {
@@ -33,7 +36,7 @@ async function mintIntegrationToken() {
   const text = await res.text().catch(() => "")
   if (!res.ok) {
     throw new Error(
-      `[integration] token error: ${res.status} ${text.slice(0, 500)}`,
+      `[integration] token error: ${res.status} ${text.slice(0, 800)}`,
     )
   }
 
@@ -70,20 +73,30 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  // Always return JSON (so Network tab is useful)
+  res.setHeader("Content-Type", "application/json; charset=utf-8")
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST")
     return res.status(405).json({ ok: false, error: "method_not_allowed" })
   }
 
+  const orderId = String(req.query.orderId || "").trim()
+
   try {
-    const orderId = String(req.query.orderId || "").trim()
-    if (!orderId)
+    if (!orderId) {
       return res.status(400).json({ ok: false, error: "missing_order_id" })
+    }
+
+    const { slug, base } = clApiBase()
+    console.log("[refresh] using org slug:", slug)
+    console.log("[refresh] base:", base)
+    console.log("[refresh] orderId:", orderId)
 
     const accessToken = await mintIntegrationToken()
-    const base = clApiBase()
+    console.log("[refresh] integration token ok", accessToken.slice(0, 12))
 
-    // 1) Refresh
+    // 1) refresh
     const refresh = await clFetch(
       `${base}/orders/${orderId}/_refresh`,
       accessToken,
@@ -93,7 +106,7 @@ export default async function handler(
       },
     )
 
-    // 2) Re-fetch with includes
+    // 2) fetch with includes
     const include = [
       "market",
       "line_items",
@@ -101,6 +114,7 @@ export default async function handler(
       "shipments.stock_transfers",
       "shipments.available_shipping_methods",
       "shipments.shipping_method",
+      "shipments.stock_location",
     ].join(",")
 
     const order = await clFetch(
@@ -119,35 +133,47 @@ export default async function handler(
     )
 
     const debug = {
+      slug,
       refreshOk: refresh.ok,
       refreshStatus: refresh.status,
+      refreshBodyPreview: refresh.ok
+        ? null
+        : (refresh.json ?? refresh.text.slice(0, 800)),
       orderFetchOk: order.ok,
       orderFetchStatus: order.status,
+      orderBodyPreview: order.ok
+        ? null
+        : (order.json ?? order.text.slice(0, 800)),
       shipmentsCount: shipments.length,
       stockTransfersCount: stockTransfers.length,
       shippingMethodsCount: shippingMethods.length,
     }
 
-    console.log("[orders/refresh]", { orderId, debug })
-
+    // If refresh failed, surface exactly why.
     if (!refresh.ok) {
       return res.status(500).json({
         ok: false,
         error: "refresh_failed",
         debug,
-        refreshBody: refresh.json ?? refresh.text.slice(0, 1500),
       })
     }
 
-    return res.status(200).json({
-      ok: true,
-      debug,
-    })
+    // If fetch failed, surface exactly why.
+    if (!order.ok) {
+      return res.status(500).json({
+        ok: false,
+        error: "order_fetch_failed",
+        debug,
+      })
+    }
+
+    return res.status(200).json({ ok: true, debug })
   } catch (e: any) {
-    console.error("[orders/refresh] server_error", e)
+    console.error("[refresh] server_error", e)
     return res.status(500).json({
       ok: false,
       error: "server_error",
+      orderId,
       message: e?.message ?? String(e),
     })
   }
