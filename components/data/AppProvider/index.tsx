@@ -197,7 +197,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     dispatch({
       type: ActionType.SET_ORDER,
       payload: {
-        order: normalizedOrder,
+        order: orderWithShipments, // ✅ IMPORTANT: keep shipments you just computed
         others: {
           isShipmentRequired,
           ...others,

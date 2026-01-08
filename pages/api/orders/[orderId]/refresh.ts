@@ -7,18 +7,12 @@ function env(name: string) {
 }
 
 /**
- * IMPORTANT:
- * Commerce Layer API base uses the ORGANIZATION SLUG (subdomain),
- * not the "organization name".
- *
- * In many projects this env is called CL_SLUG.
- * If your CL_ORGANIZATION already contains the slug, this still works.
+ * CL API base uses the ORGANIZATION SLUG (subdomain).
+ * Prefer CL_SLUG. If CL_ORGANIZATION already equals the slug, fallback works.
  */
 function clApiBase() {
   const slug =
-    process.env.CL_SLUG?.trim() ||
-    process.env.CL_ORGANIZATION?.trim() || // fallback
-    ""
+    process.env.CL_SLUG?.trim() || process.env.CL_ORGANIZATION?.trim()
   if (!slug)
     throw new Error("Missing env: CL_SLUG (or CL_ORGANIZATION as slug)")
   return `https://${slug}.commercelayer.io/api`
@@ -31,7 +25,7 @@ async function mintIntegrationToken() {
     grant_type: "client_credentials",
     client_id: env("CL_INT_CLIENT_ID"),
     client_secret: env("CL_INT_CLIENT_SECRET"),
-    // OPTIONAL: if you use scoped integration tokens, uncomment:
+    // If you use scopes for the integration app, uncomment:
     // scope: process.env.CL_INT_SCOPE?.trim() || "",
   })
 
@@ -103,18 +97,17 @@ export default async function handler(
     const accessToken = await mintIntegrationToken()
     const base = clApiBase()
 
-    // 1) Refresh the order (this is what should generate stock transfers)
+    // 1) Refresh
     const refresh = await clFetch(
       `${base}/orders/${orderId}/_refresh`,
       accessToken,
       {
         method: "POST",
-        body: JSON.stringify({}), // harmless, but avoids edge cases with empty body
+        body: JSON.stringify({}),
       },
     )
 
-    // 2) Immediately re-fetch the order with the stuff we care about
-    // (shipments + stock transfers + available shipping methods)
+    // 2) Fetch order with relationships we care about
     const include = [
       "market",
       "line_items",
@@ -127,9 +120,7 @@ export default async function handler(
     const order = await clFetch(
       `${base}/orders/${orderId}?include=${encodeURIComponent(include)}`,
       accessToken,
-      {
-        method: "GET",
-      },
+      { method: "GET" },
     )
 
     const included: any[] = Array.isArray(order.json?.included)
@@ -138,7 +129,7 @@ export default async function handler(
 
     const shipments = included.filter((r) => r?.type === "shipments")
     const stockTransfers = included.filter((r) => r?.type === "stock_transfers")
-    const availShipMethods = included.filter(
+    const shippingMethods = included.filter(
       (r) => r?.type === "shipping_methods",
     )
 
@@ -149,12 +140,12 @@ export default async function handler(
       orderFetchStatus: order.status,
       shipmentsCount: shipments.length,
       stockTransfersCount: stockTransfers.length,
-      availableShippingMethodsCount: availShipMethods.length,
+      shippingMethodsIncludedCount: shippingMethods.length,
     }
 
+    // eslint-disable-next-line no-console
     console.log("[orders/refresh] result", { orderId, ...debug })
 
-    // If refresh failed, return its error (this is what you need in Vercel logs)
     if (!refresh.ok) {
       return res.status(500).json({
         ok: false,
@@ -164,14 +155,14 @@ export default async function handler(
       })
     }
 
-    // If refresh succeeded but nothing got generated, surface that clearly
     return res.status(200).json({
       ok: true,
       debug,
-      // helpful when you need to see *why* it’s empty without digging in CL UI
-      refreshBody: refresh.json ?? refresh.text.slice(0, 800),
+      // This is useful to see if CL says "refreshed" but still generated nothing
+      orderBody: order.json ?? order.text.slice(0, 1500),
     })
   } catch (e: any) {
+    // eslint-disable-next-line no-console
     console.error("[orders/refresh] server_error", e)
     return res.status(500).json({
       ok: false,

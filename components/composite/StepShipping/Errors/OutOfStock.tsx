@@ -14,6 +14,7 @@ export const OutOfStock = ({
   cartUrl,
 }: Props) => {
   const { t } = useTranslation()
+
   return (
     <Errors resource="line_items" messages={messages}>
       {({ errors }) => {
@@ -23,6 +24,7 @@ export const OutOfStock = ({
               errors={errors}
               setOutOfStockError={setOutOfStockError}
             />
+
             {errors.map((error, index) => (
               <p key={index}>
                 {error}
@@ -62,8 +64,17 @@ const ErrorEffect = ({
   setOutOfStockError: Dispatch<SetStateAction<boolean>>
 }) => {
   useEffect(() => {
-    setOutOfStockError(errors.length > 0 && errors[0] !== undefined)
-  }, [errors.length, setOutOfStockError])
+    // DEBUG: this tells us exactly what the Errors component is giving you
+    // (usually translated strings, not CL codes)
+    // eslint-disable-next-line no-console
+    console.log("[OutOfStock] Errors resource=line_items", { errors })
+
+    const hasAnyError = Array.isArray(errors)
+      ? errors.some((e) => typeof e === "string" && e.trim().length > 0)
+      : false
+
+    setOutOfStockError(hasAnyError)
+  }, [errors, setOutOfStockError])
 
   return null
 }

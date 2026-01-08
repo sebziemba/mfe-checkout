@@ -115,9 +115,9 @@ export const StepCustomer: React.FC<Props> = () => {
     if (!appCtx) return
     if (!params?.success || !params?.order?.id) return
 
-    setIsLocalLoader(true)
+    console.log("[StepCustomer] handleSave params", params) // ✅ add here
 
-    // 1) Update app context with the saved order
+    setIsLocalLoader(true)
     await appCtx.setAddresses(params.order)
 
     // 2) ✅ After addresses are saved, force CL to generate shipments/stock transfers
