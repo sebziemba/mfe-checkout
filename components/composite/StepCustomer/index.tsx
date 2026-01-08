@@ -1,4 +1,5 @@
 import type { Order } from "@commercelayer/sdk"
+import { CommerceLayer } from "@commercelayer/sdk"
 import classNames from "classnames"
 import { AccordionContext } from "components/data/AccordionProvider"
 import { AppContext } from "components/data/AppProvider"
@@ -23,6 +24,57 @@ interface Props {
 export interface ShippingToggleProps {
   forceShipping?: boolean
   disableToggle: boolean
+}
+
+/**
+ * Legacy helper kept for compatibility.
+ * In your current flow we do NOT force/disable anything here.
+ */
+interface EvaluateConditionsProps {
+  countryCode?: string
+  shippingCountryCodeLock: string | null | undefined
+}
+
+export function evaluateShippingToggle(
+  _args: EvaluateConditionsProps,
+): ShippingToggleProps {
+  return { disableToggle: false }
+}
+
+/**
+ * Helper: get access token from ?accessToken=... in URL
+ * (MFE checkout uses this for the Sales Channel token)
+ */
+function getAccessTokenFromUrl(): string | null {
+  if (typeof window === "undefined") return null
+  const url = new URL(window.location.href)
+  return url.searchParams.get("accessToken")
+}
+
+/**
+ * Helper: build a CL client for client-side calls (Sales Channel token)
+ * - organization: from NEXT_PUBLIC_CL_SLUG (or NEXT_PUBLIC_CL_ORGANIZATION)
+ * - domain: optional (if you use custom domain), from NEXT_PUBLIC_CL_DOMAIN
+ */
+function getClientSideCL(accessToken: string) {
+  const organization =
+    process.env.NEXT_PUBLIC_CL_SLUG?.trim() ||
+    process.env.NEXT_PUBLIC_CL_ORGANIZATION?.trim() ||
+    ""
+
+  if (!organization) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_CL_SLUG (or NEXT_PUBLIC_CL_ORGANIZATION)",
+    )
+  }
+
+  const domain = process.env.NEXT_PUBLIC_CL_DOMAIN?.trim() || undefined
+
+  return CommerceLayer({
+    organization,
+    accessToken,
+    ...(domain ? { domain } : {}),
+  })
 }
 
 export const StepHeaderCustomer: React.FC<Props> = ({ step }) => {
@@ -68,18 +120,18 @@ export const StepHeaderCustomer: React.FC<Props> = ({ step }) => {
   )
 }
 
-export const StepCustomer: React.FC<Props> = ({ className, step }) => {
+export const StepCustomer: React.FC<Props> = ({ className }) => {
   const appCtx = useContext(AppContext)
   const accordionCtx = useContext(AccordionContext)
 
   const [isLocalLoader, setIsLocalLoader] = useState(false)
-  const lastRefreshedOrderIdRef = useRef<string | null>(null)
+
+  // Prevent double-triggering allocation for the same order id
+  const lastAutorefreshOrderIdRef = useRef<string | null>(null)
 
   /**
    * NEW meaning:
    * shipToDifferentAddress === billToDifferentAddress (show billing only when true)
-   *
-   * Compute initial value safely.
    */
   const initialBillToDifferentAddress = useMemo(() => {
     const shipId = appCtx?.shippingAddress?.id
@@ -92,15 +144,10 @@ export const StepCustomer: React.FC<Props> = ({ className, step }) => {
     initialBillToDifferentAddress,
   )
 
-  // Keep in sync when order updates
   useEffect(() => {
     setShipToDifferentAddress(initialBillToDifferentAddress)
   }, [initialBillToDifferentAddress])
 
-  /**
-   * Old logic disabled/forced toggle based on billing country mismatch.
-   * That no longer applies in your flow.
-   */
   const [disabledShipToDifferentAddress, setDisabledShipToDifferentAddress] =
     useState(false)
 
@@ -108,66 +155,70 @@ export const StepCustomer: React.FC<Props> = ({ className, step }) => {
     setDisabledShipToDifferentAddress(false)
   }, [appCtx?.shippingCountryCodeLock, appCtx?.billingAddress?.country_code])
 
-  /**
-   * Compatibility prop for some child components.
-   * In the new flow this does nothing on purpose.
-   */
   const openShippingAddress = (_props: ShippingToggleProps) => {
     // no-op
+  }
+
+  /**
+   * ✅ THE FIX:
+   * After saving addresses, force an ORDER UPDATE with autorefresh:true
+   * using the Sales Channel token (client-side).
+   *
+   * This is the only reliable way to trigger shipments/stock transfers allocation
+   * in your setup (since POST /_refresh returns 404).
+   */
+  const triggerAutorefreshUpdate = async (orderId: string) => {
+    const accessToken = getAccessTokenFromUrl()
+    if (!accessToken) {
+      console.warn(
+        "[StepCustomer] Missing accessToken in URL; cannot autorefresh",
+      )
+      return
+    }
+
+    const cl = getClientSideCL(accessToken)
+
+    console.log("[StepCustomer] triggering autorefresh update", { orderId })
+
+    // Minimal update that triggers allocation
+    await cl.orders.update({
+      type: "orders",
+      id: orderId,
+      autorefresh: true,
+    } as any)
   }
 
   const handleSave = async (params: { success: boolean; order?: Order }) => {
     if (!appCtx) return
 
-    console.log("[StepCustomer] handleSave called", {
-      success: params?.success,
-      hasOrder: !!params?.order,
-      paramOrderId: params?.order?.id,
-      ctxOrderId: appCtx.orderId,
-    })
-
-    // IMPORTANT: do NOT block refresh behind params.success/order.id for now
     setIsLocalLoader(true)
 
     try {
-      // Update context first (even if params.order is partial)
-      if (params?.order) {
-        await appCtx.setAddresses(params.order)
-      } else {
-        // still attempt to set addresses from current order if needed
-        const current = await appCtx.getOrderFromRef()
-        await appCtx.setAddresses(current)
-      }
+      // 1) Update the AppProvider state first
+      const orderToUse = params?.order ?? (await appCtx.getOrderFromRef())
 
-      // Reliable order id (fallback to ctx orderId)
-      const orderId = params?.order?.id || appCtx.orderId
-      console.log("[StepCustomer] about to call refresh", { orderId })
+      await appCtx.setAddresses(orderToUse)
 
-      // Absolute URL so there is zero ambiguity about basePath / routing
-      const refreshUrl = new URL(
-        `/api/orders/${orderId}/refresh`,
-        window.location.origin,
-      ).toString()
+      // 2) If shipment required, trigger allocation
+      // We must use a REAL order update (autorefresh:true)
+      const orderId = orderToUse?.id || appCtx.orderId
 
-      const res = await fetch(refreshUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        credentials: "same-origin",
-      })
+      if (
+        appCtx.isShipmentRequired &&
+        orderId &&
+        lastAutorefreshOrderIdRef.current !== orderId
+      ) {
+        lastAutorefreshOrderIdRef.current = orderId
 
-      const json = await res.json().catch(() => null)
-
-      console.log("[StepCustomer] refresh result", {
-        status: res.status,
-        ok: res.ok,
-        json,
-      })
-
-      // For debugging: always reload if refresh call returns OK
-      if (res.ok && json?.ok) {
-        window.location.reload()
-        return
+        try {
+          await triggerAutorefreshUpdate(orderId)
+          console.log("[StepCustomer] autorefresh update done; reloading")
+          window.location.reload()
+          return
+        } catch (e) {
+          console.warn("[StepCustomer] autorefresh update failed", e)
+          // If this fails, we still continue (UI will show errors)
+        }
       }
     } catch (e) {
       console.warn("[StepCustomer] handleSave exception", e)
@@ -246,19 +297,4 @@ export const StepCustomer: React.FC<Props> = ({ className, step }) => {
       </StepContent>
     </StepContainer>
   )
-}
-
-interface EvaluateConditionsProps {
-  countryCode?: string
-  shippingCountryCodeLock: string | null | undefined
-}
-
-/**
- * Legacy helper kept for compatibility.
- * In your current flow we do NOT force/disable anything here.
- */
-export function evaluateShippingToggle(
-  _args: EvaluateConditionsProps,
-): ShippingToggleProps {
-  return { disableToggle: false }
 }
