@@ -54,9 +54,7 @@ export const CheckoutAddresses: React.FC<Props> = ({
 }: Props) => {
   const { t } = useTranslation()
 
-  // We re-use the old boolean but reinterpret it:
-  // true  => billing is different (show billing form)
-  // false => billing = shipping (billing form stays hidden but mounted)
+  // Reuse prop name, but it now means: "Use a different billing address"
   const billToDifferentAddress = shipToDifferentAddress
 
   const [shippingAddressFill, setShippingAddressFill] =
@@ -68,15 +66,7 @@ export const CheckoutAddresses: React.FC<Props> = ({
 
   const handleToggleDifferentBilling = () => {
     setShipToDifferentAddress(!billToDifferentAddress)
-    // no need to reset shipping
   }
-
-  // IMPORTANT:
-  // If billing is not different, we feed the BILLING form with the SHIPPING address
-  // so SaveAddressesButton / container validation considers billing "filled".
-  const billingAddressForForm = billToDifferentAddress
-    ? billingAddress
-    : shippingAddressFill
 
   const noopOpenShippingAddress = (_: any) => {}
 
@@ -87,8 +77,7 @@ export const CheckoutAddresses: React.FC<Props> = ({
         setCustomerEmail={setCustomerEmail}
       />
 
-      {/* IMPORTANT: keep this true when shipment is required,
-          because the CL components expect shipping flow when "different address" is active. */}
+      {/* CRITICAL: when shipment is required, CL must treat shipping as enabled/validated */}
       <AddressesContainer shipToDifferentAddress={!!isShipmentRequired}>
         {/* SHIPPING FIRST */}
         {isShipmentRequired && (
@@ -120,35 +109,20 @@ export const CheckoutAddresses: React.FC<Props> = ({
           />
         </div>
 
-        {/* Visible BILLING only if toggled ON */}
+        {/* BILLING only if toggled ON */}
         {billToDifferentAddress && (
           <div className="mt-4">
             <AddressSectionTitle data-testid="billing-address">
               <>{t("addressForm.billing_address_title")}</>
             </AddressSectionTitle>
-          </div>
-        )}
 
-        {/* BILLING FORM is ALWAYS mounted.
-            When toggle is OFF, it is hidden but prefilled from shipping. */}
-        <div className={billToDifferentAddress ? "mt-4" : "hidden"}>
-          <BillingAddressForm autoComplete="on" errorClassName="hasError">
-            <BillingAddressFormNew
-              billingAddress={billingAddressForForm}
-              openShippingAddress={noopOpenShippingAddress}
-            />
-          </BillingAddressForm>
-        </div>
-
-        {/* When toggle is OFF we still mount billing, but hidden.
-            This extra wrapper ensures it stays in the DOM. */}
-        {!billToDifferentAddress && (
-          <div className="hidden">
             <BillingAddressForm autoComplete="on" errorClassName="hasError">
-              <BillingAddressFormNew
-                billingAddress={billingAddressForForm}
-                openShippingAddress={noopOpenShippingAddress}
-              />
+              <div className="mt-4">
+                <BillingAddressFormNew
+                  billingAddress={billingAddress}
+                  openShippingAddress={noopOpenShippingAddress}
+                />
+              </div>
             </BillingAddressForm>
           </div>
         )}

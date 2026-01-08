@@ -17,7 +17,6 @@ import {
   Fragment,
   type SetStateAction,
   useEffect,
-  useMemo,
   useState,
 } from "react"
 import { useTranslation } from "react-i18next"
@@ -53,8 +52,9 @@ type AddressTypeEnum = "shipping" | "billing"
  * SHIPPING FIRST.
  * Toggle means: "Use a different billing address".
  *
- * IMPORTANT: BillingAddressForm is ALWAYS mounted (sometimes hidden),
- * otherwise SaveAddressesButton / CL internals often don't allow progressing.
+ * IMPORTANT: We DO NOT pass the toggle into AddressesContainer.
+ * When shipment is required, AddressesContainer must treat shipping as "enabled",
+ * otherwise it validates billing only and Save stays disabled.
  */
 export const CheckoutCustomerAddresses: React.FC<Props> = ({
   billingAddress,
@@ -66,25 +66,20 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
   hasCustomerAddresses,
   emailAddress,
   isLocalLoader,
-  // shippingCountryCodeLock,
   shipToDifferentAddress,
   setShipToDifferentAddress,
-  // openShippingAddress, // no longer used to affect shipping based on billing
-  // disabledShipToDifferentAddress, // no longer relevant for billing toggle
+  // openShippingAddress,
+  // disabledShipToDifferentAddress,
   handleSave,
 }: Props) => {
   const { t } = useTranslation()
 
-  /**
-   * We re-use the existing prop/state name `shipToDifferentAddress`
-   * but UI-wise this now means "Use a different BILLING address".
-   */
+  // Reuse existing name, but it now means: "different billing"
   const billToDifferentAddress = shipToDifferentAddress
 
-  const [billingAddressFill, setBillingAddressFill] =
-    useState<NullableType<Address>>(billingAddress)
+  const [billingAddressFill, setBillingAddressFill] = useState(billingAddress)
   const [shippingAddressFill, setShippingAddressFill] =
-    useState<NullableType<Address>>(shippingAddress)
+    useState(shippingAddress)
 
   const [showBillingAddressForm, setShowBillingAddressForm] = useState<boolean>(
     isUsingNewBillingAddress,
@@ -100,40 +95,24 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     isUsingNewShippingAddress,
   )
 
-  // keep local fills in sync if props change
-  useEffect(() => {
-    setBillingAddressFill(billingAddress)
-  }, [billingAddress])
+  // Sync fills if props change
+  useEffect(() => setBillingAddressFill(billingAddress), [billingAddress])
+  useEffect(() => setShippingAddressFill(shippingAddress), [shippingAddress])
 
-  useEffect(() => {
-    setShippingAddressFill(shippingAddress)
-  }, [shippingAddress])
-
-  // If user toggles "different billing" ON and they don't have an address book,
-  // show the billing form; if addresses were same, reset billing so they can fill it.
+  // When toggle turns ON and there is no address book,
+  // show billing form; if addresses were same, reset billing so they can fill it.
   useEffect(() => {
     if (billToDifferentAddress && !hasCustomerAddresses) {
-      if (hasSameAddresses) {
-        setBillingAddressFill(undefined)
-      }
+      if (hasSameAddresses) setBillingAddressFill(undefined)
       setShowBillingAddressForm(true)
       setMountBillingAddressForm(true)
     }
 
-    // When toggling OFF, hide billing form UI (billing becomes same as shipping).
     if (!billToDifferentAddress) {
       setMountBillingAddressForm(false)
       setShowBillingAddressForm(false)
     }
   }, [billToDifferentAddress, hasCustomerAddresses, hasSameAddresses])
-
-  const noopOpenShippingAddress = (_: any) => {}
-
-  // When billing is NOT different, the billing form should effectively use shipping data
-  // so the SaveAddressesButton becomes enabled and CL sees billing as present.
-  const billingAddressForForm = useMemo(() => {
-    return billToDifferentAddress ? billingAddressFill : shippingAddressFill
-  }, [billToDifferentAddress, billingAddressFill, shippingAddressFill])
 
   const handleScroll = (type: AddressTypeEnum) => {
     const tab = document
@@ -161,7 +140,6 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     setShipToDifferentAddress(next)
 
     if (!hasCustomerAddresses) {
-      // no address book: open/close billing form
       if (next) {
         setBillingAddressFill(undefined)
         setShowBillingAddressForm(true)
@@ -172,7 +150,6 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
         setShowBillingAddressForm(false)
       }
     } else {
-      // address book: just hide billing section when off
       if (!next) {
         setMountBillingAddressForm(false)
         setShowBillingAddressForm(false)
@@ -180,12 +157,18 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     }
   }
 
+  // Do not tie billing selection to shipping lock anymore
+  const noopOpenShippingAddress = (_: any) => {}
+
   return (
     <Fragment>
       <AddressSectionEmail readonly emailAddress={emailAddress as string} />
 
-      <AddressesContainer shipToDifferentAddress={billToDifferentAddress}>
-        {/* 1) SHIPPING FIRST */}
+      {/* CRITICAL CHANGE:
+          Pass "true" when shipment is required so shipping is validated/enabled in CL.
+          Do NOT pass billToDifferentAddress here. */}
+      <AddressesContainer shipToDifferentAddress={!!isShipmentRequired}>
+        {/* SHIPPING FIRST */}
         {isShipmentRequired && (
           <>
             <AddressSectionTitle data-testid="shipping-address">
@@ -261,7 +244,7 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
           </>
         )}
 
-        {/* 2) TOGGLE: optional different BILLING */}
+        {/* Toggle: optional different BILLING */}
         <Toggle
           disabled={false}
           data-testid="button-bill-to-different-address"
@@ -274,89 +257,78 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
           onChange={handleToggleBilling}
         />
 
-        {/* 3) BILLING UI only when toggled ON */}
-        <div className={billToDifferentAddress ? "mt-2" : "hidden"}>
-          <AddressSectionTitle data-testid="billing-address">
-            <>{t("addressForm.billing_address_title")}</>
-          </AddressSectionTitle>
+        {/* Billing only if toggled ON */}
+        {billToDifferentAddress && (
+          <div className="mt-2">
+            <AddressSectionTitle data-testid="billing-address">
+              <>{t("addressForm.billing_address_title")}</>
+            </AddressSectionTitle>
 
-          <div className="relative">
-            {hasCustomerAddresses && (
-              <>
+            <div className="relative">
+              {hasCustomerAddresses && (
+                <>
+                  <Transition
+                    as="div"
+                    show={!showBillingAddressForm}
+                    {...addressesTransition}
+                  >
+                    <GridContainer className="mb-4">
+                      <BillingAddressContainer>
+                        <CustomerAddressCard
+                          addressType="billing"
+                          deselect={showBillingAddressForm}
+                          onSelect={() =>
+                            localStorage.setItem(
+                              "_save_billing_address_to_customer_address_book",
+                              "false",
+                            )
+                          }
+                        />
+                      </BillingAddressContainer>
+                    </GridContainer>
+                  </Transition>
+
+                  {!showBillingAddressForm && (
+                    <AddButton
+                      dataTestId="add_new_billing_address"
+                      action={handleShowBillingForm}
+                    />
+                  )}
+                </>
+              )}
+
+              <div className="top-0 mt-4">
                 <Transition
                   as="div"
-                  show={!showBillingAddressForm}
-                  {...addressesTransition}
+                  show={showBillingAddressForm || !hasCustomerAddresses}
+                  beforeEnter={() => setMountBillingAddressForm(true)}
+                  afterLeave={() => setMountBillingAddressForm(false)}
+                  {...formTransition}
                 >
-                  <GridContainer className="mb-4">
-                    <BillingAddressContainer>
-                      <CustomerAddressCard
-                        addressType="billing"
-                        deselect={showBillingAddressForm}
-                        onSelect={() =>
-                          localStorage.setItem(
-                            "_save_billing_address_to_customer_address_book",
-                            "false",
-                          )
-                        }
-                      />
-                    </BillingAddressContainer>
-                  </GridContainer>
+                  <BillingAddressForm
+                    autoComplete="on"
+                    reset={!showBillingAddressForm}
+                    errorClassName="hasError"
+                  >
+                    {mountBillingAddressForm || !hasCustomerAddresses ? (
+                      <>
+                        <BillingAddressFormNew
+                          billingAddress={billingAddressFill}
+                          openShippingAddress={noopOpenShippingAddress}
+                        />
+                        <AddressFormBottom
+                          addressType="billing"
+                          onClick={handleShowBillingForm}
+                          hasCustomerAddresses={hasCustomerAddresses}
+                        />
+                      </>
+                    ) : (
+                      <Fragment />
+                    )}
+                  </BillingAddressForm>
                 </Transition>
-
-                {!showBillingAddressForm && (
-                  <AddButton
-                    dataTestId="add_new_billing_address"
-                    action={handleShowBillingForm}
-                  />
-                )}
-              </>
-            )}
-
-            <div className="top-0 mt-4">
-              <Transition
-                as="div"
-                show={showBillingAddressForm || !hasCustomerAddresses}
-                beforeEnter={() => setMountBillingAddressForm(true)}
-                afterLeave={() => setMountBillingAddressForm(false)}
-                {...formTransition}
-              >
-                <BillingAddressForm
-                  autoComplete="on"
-                  reset={!showBillingAddressForm}
-                  errorClassName="hasError"
-                >
-                  {mountBillingAddressForm || !hasCustomerAddresses ? (
-                    <>
-                      <BillingAddressFormNew
-                        billingAddress={billingAddressForForm}
-                        openShippingAddress={noopOpenShippingAddress}
-                      />
-                      <AddressFormBottom
-                        addressType="billing"
-                        onClick={handleShowBillingForm}
-                        hasCustomerAddresses={hasCustomerAddresses}
-                      />
-                    </>
-                  ) : (
-                    <Fragment />
-                  )}
-                </BillingAddressForm>
-              </Transition>
+              </div>
             </div>
-          </div>
-        </div>
-
-        {/* 4) HIDDEN BILLING FORM: ALWAYS mounted when toggle is OFF
-            This is what makes SaveAddressesButton / CL validation happy. */}
-        {!billToDifferentAddress && (
-          <div className="hidden">
-            <BillingAddressForm autoComplete="on" errorClassName="hasError">
-              <BillingAddressFormNew
-                billingAddress={billingAddressForForm}
-                openShippingAddress={noopOpenShippingAddress}
-              />
-            </BillingAddressForm>
           </div>
         )}
 
@@ -399,5 +371,5 @@ const formTransition = {
   enterTo: "opacity-100 translate-y-0",
   leave: "duration-400 transition ease-out absolute top-0 w-full",
   leaveFrom: "opacity-100 translate-y-0",
-  leaveTo: "opacity-0 translate-y-full",
+  leaveTo: "opacity-0 -translate-y-full",
 }
