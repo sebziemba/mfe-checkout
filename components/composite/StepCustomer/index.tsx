@@ -118,69 +118,68 @@ export const StepCustomer: React.FC<Props> = ({ className, step }) => {
 
   const handleSave = async (params: { success: boolean; order?: Order }) => {
     if (!appCtx) return
-    if (!params?.success || !params?.order?.id) return
 
+    console.log("[StepCustomer] handleSave called", {
+      success: params?.success,
+      hasOrder: !!params?.order,
+      paramOrderId: params?.order?.id,
+      ctxOrderId: appCtx.orderId,
+    })
+
+    // IMPORTANT: do NOT block refresh behind params.success/order.id for now
     setIsLocalLoader(true)
 
-    // 1) Update app context with the saved order
-    await appCtx.setAddresses(params.order)
-
-    // 2) Trigger server refresh once per order id
-    const isShipmentRequired = appCtx.isShipmentRequired === true
-
-    // shipping address id can be present in different shapes
-    const shippingAddressId =
-      (params.order as any)?.shipping_address?.id ||
-      (params.order as any)?.shipping_address_id ||
-      (params.order as any)?.shipping_address?.data?.id
-
-    const orderId = params.order.id
-
-    if (
-      isShipmentRequired &&
-      shippingAddressId &&
-      lastRefreshedOrderIdRef.current !== orderId
-    ) {
-      lastRefreshedOrderIdRef.current = orderId
-
-      try {
-        console.log("[StepCustomer] calling refresh", { orderId })
-
-        const res = await fetch(`/api/orders/${orderId}/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-        })
-
-        const json = await res.json().catch(() => null)
-
-        console.log("[StepCustomer] refresh response", {
-          status: res.status,
-          json,
-        })
-
-        if (!res.ok || !json?.ok) {
-          console.warn("[StepCustomer] refresh failed", {
-            status: res.status,
-            json,
-          })
-        } else {
-          // Force MFE to re-fetch order/shipments/stock transfers
-          window.location.reload()
-          return
-        }
-      } catch (e) {
-        console.warn("[StepCustomer] refresh exception", e)
+    try {
+      // Update context first (even if params.order is partial)
+      if (params?.order) {
+        await appCtx.setAddresses(params.order)
+      } else {
+        // still attempt to set addresses from current order if needed
+        const current = await appCtx.getOrderFromRef()
+        await appCtx.setAddresses(current)
       }
+
+      // Reliable order id (fallback to ctx orderId)
+      const orderId = params?.order?.id || appCtx.orderId
+      console.log("[StepCustomer] about to call refresh", { orderId })
+
+      // Absolute URL so there is zero ambiguity about basePath / routing
+      const refreshUrl = new URL(
+        `/api/orders/${orderId}/refresh`,
+        window.location.origin,
+      ).toString()
+
+      const res = await fetch(refreshUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        credentials: "same-origin",
+      })
+
+      const json = await res.json().catch(() => null)
+
+      console.log("[StepCustomer] refresh result", {
+        status: res.status,
+        ok: res.ok,
+        json,
+      })
+
+      // For debugging: always reload if refresh call returns OK
+      if (res.ok && json?.ok) {
+        window.location.reload()
+        return
+      }
+    } catch (e) {
+      console.warn("[StepCustomer] handleSave exception", e)
+    } finally {
+      // keep your scroll fix
+      const tab = document.querySelector('div[tabindex="2"]')
+      const top = tab?.scrollLeft as number
+      const left = tab?.scrollTop as number
+      window.scrollTo({ left, top, behavior: "smooth" })
+
+      setIsLocalLoader(false)
     }
-
-    // keep your scroll fix
-    const tab = document.querySelector('div[tabindex="2"]')
-    const top = tab?.scrollLeft as number
-    const left = tab?.scrollTop as number
-    window.scrollTo({ left, top, behavior: "smooth" })
-
-    setIsLocalLoader(false)
   }
 
   if (!appCtx || !accordionCtx) return null
