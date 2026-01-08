@@ -48,14 +48,6 @@ interface Props {
 
 type AddressTypeEnum = "shipping" | "billing"
 
-/**
- * SHIPPING FIRST.
- * Toggle means: "Use a different billing address".
- *
- * IMPORTANT: We DO NOT pass the toggle into AddressesContainer.
- * When shipment is required, AddressesContainer must treat shipping as "enabled",
- * otherwise it validates billing only and Save stays disabled.
- */
 export const CheckoutCustomerAddresses: React.FC<Props> = ({
   billingAddress,
   shippingAddress,
@@ -68,13 +60,11 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
   isLocalLoader,
   shipToDifferentAddress,
   setShipToDifferentAddress,
-  // openShippingAddress,
-  // disabledShipToDifferentAddress,
   handleSave,
 }: Props) => {
   const { t } = useTranslation()
 
-  // Reuse existing name, but it now means: "different billing"
+  // toggle now means: "Use a different billing address"
   const billToDifferentAddress = shipToDifferentAddress
 
   const [billingAddressFill, setBillingAddressFill] = useState(billingAddress)
@@ -95,12 +85,9 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     isUsingNewShippingAddress,
   )
 
-  // Sync fills if props change
   useEffect(() => setBillingAddressFill(billingAddress), [billingAddress])
   useEffect(() => setShippingAddressFill(shippingAddress), [shippingAddress])
 
-  // When toggle turns ON and there is no address book,
-  // show billing form; if addresses were same, reset billing so they can fill it.
   useEffect(() => {
     if (billToDifferentAddress && !hasCustomerAddresses) {
       if (hasSameAddresses) setBillingAddressFill(undefined)
@@ -157,16 +144,12 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
     }
   }
 
-  // Do not tie billing selection to shipping lock anymore
   const noopOpenShippingAddress = (_: any) => {}
 
   return (
     <Fragment>
       <AddressSectionEmail readonly emailAddress={emailAddress as string} />
 
-      {/* CRITICAL CHANGE:
-          Pass "true" when shipment is required so shipping is validated/enabled in CL.
-          Do NOT pass billToDifferentAddress here. */}
       <AddressesContainer shipToDifferentAddress={!!isShipmentRequired}>
         {/* SHIPPING FIRST */}
         {isShipmentRequired && (
@@ -314,6 +297,8 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
                       <>
                         <BillingAddressFormNew
                           billingAddress={billingAddressFill}
+                          shippingAddress={shippingAddressFill}
+                          isSameAsShipping={false}
                           openShippingAddress={noopOpenShippingAddress}
                         />
                         <AddressFormBottom
@@ -329,6 +314,21 @@ export const CheckoutCustomerAddresses: React.FC<Props> = ({
                 </Transition>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Hidden billing (mounted) when toggle OFF:
+            does not block validation, uses shipping as fallback values */}
+        {!billToDifferentAddress && (
+          <div className="hidden">
+            <BillingAddressForm autoComplete="on" errorClassName="hasError">
+              <BillingAddressFormNew
+                billingAddress={billingAddressFill}
+                shippingAddress={shippingAddressFill}
+                isSameAsShipping={true}
+                openShippingAddress={noopOpenShippingAddress}
+              />
+            </BillingAddressForm>
           </div>
         )}
 

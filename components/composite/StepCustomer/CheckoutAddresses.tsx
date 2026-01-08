@@ -45,16 +45,14 @@ export const CheckoutAddresses: React.FC<Props> = ({
   emailAddress,
   isShipmentRequired,
   isLocalLoader,
-
   shipToDifferentAddress,
   setShipToDifferentAddress,
-
   setCustomerEmail,
   handleSave,
 }: Props) => {
   const { t } = useTranslation()
 
-  // Reuse prop name, but it now means: "Use a different billing address"
+  // toggle now means: "Use a different billing address"
   const billToDifferentAddress = shipToDifferentAddress
 
   const [shippingAddressFill, setShippingAddressFill] =
@@ -77,7 +75,7 @@ export const CheckoutAddresses: React.FC<Props> = ({
         setCustomerEmail={setCustomerEmail}
       />
 
-      {/* CRITICAL: when shipment is required, CL must treat shipping as enabled/validated */}
+      {/* When shipment is required, CL must treat shipping as enabled/validated */}
       <AddressesContainer shipToDifferentAddress={!!isShipmentRequired}>
         {/* SHIPPING FIRST */}
         {isShipmentRequired && (
@@ -109,7 +107,7 @@ export const CheckoutAddresses: React.FC<Props> = ({
           />
         </div>
 
-        {/* BILLING only if toggled ON */}
+        {/* Visible BILLING only if toggled ON */}
         {billToDifferentAddress && (
           <div className="mt-4">
             <AddressSectionTitle data-testid="billing-address">
@@ -120,9 +118,26 @@ export const CheckoutAddresses: React.FC<Props> = ({
               <div className="mt-4">
                 <BillingAddressFormNew
                   billingAddress={billingAddress}
+                  shippingAddress={shippingAddressFill}
+                  isSameAsShipping={false}
                   openShippingAddress={noopOpenShippingAddress}
                 />
               </div>
+            </BillingAddressForm>
+          </div>
+        )}
+
+        {/* Hidden BILLING (still mounted) when toggled OFF:
+            does NOT block validation and uses shipping as fallback values */}
+        {!billToDifferentAddress && (
+          <div className="hidden">
+            <BillingAddressForm autoComplete="on" errorClassName="hasError">
+              <BillingAddressFormNew
+                billingAddress={billingAddress}
+                shippingAddress={shippingAddressFill}
+                isSameAsShipping={true}
+                openShippingAddress={noopOpenShippingAddress}
+              />
             </BillingAddressForm>
           </div>
         )}

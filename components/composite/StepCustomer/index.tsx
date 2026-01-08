@@ -5,7 +5,7 @@ import { AppContext } from "components/data/AppProvider"
 import { StepContainer } from "components/ui/StepContainer"
 import { StepContent } from "components/ui/StepContent"
 import { StepHeader } from "components/ui/StepHeader"
-import { useContext, useEffect, useMemo, useState } from "react"
+import { useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { CheckoutAddresses } from "./CheckoutAddresses"
@@ -30,7 +30,6 @@ export const StepHeaderCustomer: React.FC<Props> = ({ step }) => {
   const accordionCtx = useContext(AccordionContext)
   const { t } = useTranslation()
 
-  // No early return before hooks (hooks already called above)
   if (!appCtx || !accordionCtx) return null
 
   const {
@@ -75,11 +74,12 @@ export const StepCustomer: React.FC<Props> = () => {
 
   const [isLocalLoader, setIsLocalLoader] = useState(false)
 
+  // ✅ prevents double-refresh loops for the same order
+  const lastRefreshedOrderIdRef = useRef<string | null>(null)
+
   /**
    * NEW meaning:
    * shipToDifferentAddress === billToDifferentAddress (show billing only when true)
-   *
-   * Compute initial value WITHOUT conditional hooks and safely when appCtx is null.
    */
   const initialBillToDifferentAddress = useMemo(() => {
     const shipId = appCtx?.shippingAddress?.id
@@ -92,15 +92,10 @@ export const StepCustomer: React.FC<Props> = () => {
     initialBillToDifferentAddress,
   )
 
-  // Keep in sync when order updates
   useEffect(() => {
     setShipToDifferentAddress(initialBillToDifferentAddress)
   }, [initialBillToDifferentAddress])
 
-  /**
-   * Old logic disabled/forced toggle based on billing country mismatch with NL lock.
-   * That no longer applies (billing can be any country).
-   */
   const [disabledShipToDifferentAddress, setDisabledShipToDifferentAddress] =
     useState(false)
 
@@ -117,11 +112,55 @@ export const StepCustomer: React.FC<Props> = () => {
   }
 
   const handleSave = async (params: { success: boolean; order?: Order }) => {
-    // Guard: hooks are already declared; this is runtime guard only
     if (!appCtx) return
+    if (!params?.success || !params?.order?.id) return
 
     setIsLocalLoader(true)
+
+    // 1) Update app context with the saved order
     await appCtx.setAddresses(params.order)
+
+    // 2) ✅ After addresses are saved, force CL to generate shipments/stock transfers
+    //    by calling our server refresh endpoint once per order id.
+    const orderId = params.order.id
+    const isShipmentRequired = appCtx.isShipmentRequired === true
+
+    // We only attempt refresh when a shipping address is present on the saved order
+    const shippingAddressId =
+      (params.order as any)?.shipping_address?.id ||
+      (params.order as any)?.shipping_address_id ||
+      (params.order as any)?.shipping_address?.data?.id
+
+    if (
+      isShipmentRequired &&
+      shippingAddressId &&
+      lastRefreshedOrderIdRef.current !== orderId
+    ) {
+      lastRefreshedOrderIdRef.current = orderId
+
+      try {
+        const res = await fetch(`/api/orders/${orderId}/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+        })
+
+        const json = await res.json().catch(() => null)
+
+        if (!res.ok || !json?.ok) {
+          console.warn("[StepCustomer] refresh failed", {
+            status: res.status,
+            json,
+          })
+        } else {
+          // Most reliable way to force MFE checkout to re-fetch order/shipments
+          window.location.reload()
+          return
+        }
+      } catch (e) {
+        console.warn("[StepCustomer] refresh exception", e)
+      }
+    }
 
     // keep your scroll fix
     const tab = document.querySelector('div[tabindex="2"]')
@@ -132,7 +171,6 @@ export const StepCustomer: React.FC<Props> = () => {
     setIsLocalLoader(false)
   }
 
-  // After hooks are declared, it's safe to return early
   if (!appCtx || !accordionCtx) return null
 
   const {
