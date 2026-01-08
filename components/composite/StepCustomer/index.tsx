@@ -5,7 +5,7 @@ import { AppContext } from "components/data/AppProvider"
 import { StepContainer } from "components/ui/StepContainer"
 import { StepContent } from "components/ui/StepContent"
 import { StepHeader } from "components/ui/StepHeader"
-import { useContext, useEffect, useMemo, useState } from "react"
+import { useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { CheckoutAddresses } from "./CheckoutAddresses"
@@ -73,6 +73,7 @@ export const StepCustomer: React.FC<Props> = ({ className, step }) => {
   const accordionCtx = useContext(AccordionContext)
 
   const [isLocalLoader, setIsLocalLoader] = useState(false)
+  const lastRefreshedOrderIdRef = useRef<string | null>(null)
 
   /**
    * NEW meaning:
@@ -117,12 +118,61 @@ export const StepCustomer: React.FC<Props> = ({ className, step }) => {
 
   const handleSave = async (params: { success: boolean; order?: Order }) => {
     if (!appCtx) return
-    if (!params?.success) return
+    if (!params?.success || !params?.order?.id) return
 
     setIsLocalLoader(true)
 
-    // Update app context with the saved order (or let it refetch internally)
+    // 1) Update app context with the saved order
     await appCtx.setAddresses(params.order)
+
+    // 2) Trigger server refresh once per order id
+    const isShipmentRequired = appCtx.isShipmentRequired === true
+
+    // shipping address id can be present in different shapes
+    const shippingAddressId =
+      (params.order as any)?.shipping_address?.id ||
+      (params.order as any)?.shipping_address_id ||
+      (params.order as any)?.shipping_address?.data?.id
+
+    const orderId = params.order.id
+
+    if (
+      isShipmentRequired &&
+      shippingAddressId &&
+      lastRefreshedOrderIdRef.current !== orderId
+    ) {
+      lastRefreshedOrderIdRef.current = orderId
+
+      try {
+        console.log("[StepCustomer] calling refresh", { orderId })
+
+        const res = await fetch(`/api/orders/${orderId}/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+        })
+
+        const json = await res.json().catch(() => null)
+
+        console.log("[StepCustomer] refresh response", {
+          status: res.status,
+          json,
+        })
+
+        if (!res.ok || !json?.ok) {
+          console.warn("[StepCustomer] refresh failed", {
+            status: res.status,
+            json,
+          })
+        } else {
+          // Force MFE to re-fetch order/shipments/stock transfers
+          window.location.reload()
+          return
+        }
+      } catch (e) {
+        console.warn("[StepCustomer] refresh exception", e)
+      }
+    }
 
     // keep your scroll fix
     const tab = document.querySelector('div[tabindex="2"]')
