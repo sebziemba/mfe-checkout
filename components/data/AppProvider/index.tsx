@@ -117,13 +117,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const NL = "NL" as const
 
   /**
+   * Prevent infinite loops when we auto-sync billing from shipping.
+   * We store the last shipping address id we already synced for.
+   */
+  const billingAutoSyncRef = useRef<string | null>(null)
+
+  /**
    * Fundamental normalization rules for your new flow:
    * 1) Shipping country must be NL only (order-level lock).
    * 2) Billing is optional in UI, but if missing it must equal shipping.
    *    We enforce that at the order source-of-truth.
    */
   const enforceNlShippingLock = async (o: Order): Promise<Order> => {
-    // Some SDK typings may not include this field; keep it safe.
     const current = (o as any)?.shipping_country_code_lock ?? null
     if (current === NL) return o
 
@@ -135,10 +140,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   }
 
   const ensureBillingFromShipping = async (o: Order): Promise<Order> => {
-    const hasShip = !!(o as any)?.shipping_address?.id
-    const hasBill = !!(o as any)?.billing_address?.id
-    if (hasShip && !hasBill) {
-      // Commerce Layer trigger: clone billing = shipping
+    const shipId = (o as any)?.shipping_address?.id as string | undefined
+    const billId = (o as any)?.billing_address?.id as string | undefined
+
+    if (shipId && !billId) {
       return await cl.orders.update({
         type: "orders",
         id: o.id,
@@ -149,7 +154,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   }
 
   const normalizeOrderForAddresses = async (o: Order): Promise<Order> => {
-    // Always enforce NL lock first, then ensure billing
     const locked = await enforceNlShippingLock(o)
     const normalized = await ensureBillingFromShipping(locked)
     return normalized
@@ -169,7 +173,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
     dispatch({ type: ActionType.START_LOADING })
 
-    // fetch + normalize once on initial load
     const rawOrder = await getOrderFromRef()
     const normalizedOrder = await normalizeOrderForAddresses(rawOrder)
 
@@ -216,17 +219,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const setAddresses = async (o?: Order) => {
     dispatch({ type: ActionType.START_LOADING })
 
-    // Use returned order from SaveAddressesButton if present; otherwise refetch.
     const currentOrder = o ?? (await getOrderFromRef())
-
-    // Normalize: NL lock + billing-from-shipping if missing
     const normalizedOrder = await normalizeOrderForAddresses(currentOrder)
 
     const others = calculateSettings(
       normalizedOrder,
       isShipmentRequired,
-      // FIX We are using customer addresses saved in reducer because
-      // we don't receive them from fetchOrder
       isGuest,
       state.customerAddresses,
     )
@@ -267,7 +265,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     shipmentId: string
     order?: Order
   }) => {
-    // TODO Remove after fixing components
     const currentOrder = params.order ?? (await fetchOrder(cl, orderId))
 
     const others = calculateSettings(
@@ -362,6 +359,69 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       payload: { order: currentOrder },
     })
   }
+
+  /**
+   * IMPORTANT:
+   * Auto-sync billing from shipping as soon as shipping exists (and billing doesn't).
+   * This unblocks the MFE checkout validity rules that otherwise require billing.
+   */
+  useEffect(() => {
+    const o = (orderRef.current ?? state.order ?? order) as any
+    if (!o) return
+    if (!isShipmentRequired) return
+
+    const shipId = o?.shipping_address?.id as string | undefined
+    const billId = o?.billing_address?.id as string | undefined
+    if (!shipId || billId) return
+
+    // Avoid re-running for the same shipping address id
+    if (billingAutoSyncRef.current === shipId) return
+    billingAutoSyncRef.current = shipId
+
+    ;(async () => {
+      try {
+        const updated = await cl.orders.update({
+          type: "orders",
+          id: o.id,
+          _billing_address_same_as_shipping: true,
+        } as any)
+
+        // Also ensure NL lock stays enforced
+        const locked = await enforceNlShippingLock(updated)
+
+        // Recompute flags and push them to reducer so UI unlocks immediately
+        const others = calculateSettings(
+          locked,
+          isShipmentRequired,
+          isGuest,
+          state.customerAddresses,
+        )
+
+        dispatch({
+          type: ActionType.SET_ADDRESSES,
+          payload: { order: locked, others },
+        })
+
+        // Keep refs/state consistent
+        orderRef.current = locked
+        setOrder(locked)
+      } catch (e) {
+        // Don't crash the checkout; user can still fill billing manually if needed.
+        // eslint-disable-next-line no-console
+        console.error("Auto-sync billing from shipping failed:", e)
+      }
+    })()
+    // We intentionally depend on address IDs, not whole objects, to avoid loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isShipmentRequired,
+    isGuest,
+    state.customerAddresses,
+    (state.order as any)?.shipping_address?.id,
+    (state.order as any)?.billing_address?.id,
+    (order as any)?.shipping_address?.id,
+    (order as any)?.billing_address?.id,
+  ])
 
   useEffect(() => {
     const unsubscribe = () => {
