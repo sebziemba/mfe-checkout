@@ -112,10 +112,14 @@ export const StepCustomer: React.FC<Props> = () => {
   }
 
   const handleSave = async (params: { success: boolean; order?: Order }) => {
+    console.log("[StepCustomer] handleSave called", params) // ✅ log even when it returns early
+
     if (!appCtx) return
     if (!params?.success || !params?.order?.id) return
 
-    console.log("[StepCustomer] handleSave params", params) // ✅ add here
+    console.log("[StepCustomer] handleSave proceeding", {
+      orderId: params.order.id,
+    })
 
     setIsLocalLoader(true)
     await appCtx.setAddresses(params.order)
