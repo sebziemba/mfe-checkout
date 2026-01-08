@@ -6,6 +6,24 @@ function env(name: string) {
   return v
 }
 
+/**
+ * IMPORTANT:
+ * Commerce Layer API base uses the ORGANIZATION SLUG (subdomain),
+ * not the "organization name".
+ *
+ * In many projects this env is called CL_SLUG.
+ * If your CL_ORGANIZATION already contains the slug, this still works.
+ */
+function clApiBase() {
+  const slug =
+    process.env.CL_SLUG?.trim() ||
+    process.env.CL_ORGANIZATION?.trim() || // fallback
+    ""
+  if (!slug)
+    throw new Error("Missing env: CL_SLUG (or CL_ORGANIZATION as slug)")
+  return `https://${slug}.commercelayer.io/api`
+}
+
 async function mintIntegrationToken() {
   const tokenEndpoint = "https://auth.commercelayer.io/oauth/token"
 
@@ -13,6 +31,8 @@ async function mintIntegrationToken() {
     grant_type: "client_credentials",
     client_id: env("CL_INT_CLIENT_ID"),
     client_secret: env("CL_INT_CLIENT_SECRET"),
+    // OPTIONAL: if you use scoped integration tokens, uncomment:
+    // scope: process.env.CL_INT_SCOPE?.trim() || "",
   })
 
   const res = await fetch(tokenEndpoint, {
@@ -22,6 +42,7 @@ async function mintIntegrationToken() {
       Accept: "application/json",
     },
     body,
+    cache: "no-store",
   })
 
   const text = await res.text().catch(() => "")
@@ -35,6 +56,33 @@ async function mintIntegrationToken() {
   if (!json?.access_token)
     throw new Error("[integration] token missing access_token")
   return json.access_token as string
+}
+
+async function clFetch(
+  url: string,
+  accessToken: string,
+  init?: RequestInit,
+): Promise<{ ok: boolean; status: number; text: string; json: any | null }> {
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/vnd.api+json",
+      "Content-Type": "application/vnd.api+json",
+      ...(init?.headers ?? {}),
+    },
+    cache: "no-store",
+  })
+
+  const text = await res.text().catch(() => "")
+  let json: any | null = null
+  try {
+    json = text ? JSON.parse(text) : null
+  } catch {
+    json = null
+  }
+
+  return { ok: res.ok, status: res.status, text, json }
 }
 
 export default async function handler(
@@ -53,31 +101,78 @@ export default async function handler(
     }
 
     const accessToken = await mintIntegrationToken()
-    const organization = env("CL_ORGANIZATION")
-    const base = `https://${organization}.commercelayer.io/api`
+    const base = clApiBase()
 
-    const refreshRes = await fetch(`${base}/orders/${orderId}/_refresh`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
+    // 1) Refresh the order (this is what should generate stock transfers)
+    const refresh = await clFetch(
+      `${base}/orders/${orderId}/_refresh`,
+      accessToken,
+      {
+        method: "POST",
+        body: JSON.stringify({}), // harmless, but avoids edge cases with empty body
       },
-    })
+    )
 
-    const refreshText = await refreshRes.text().catch(() => "")
+    // 2) Immediately re-fetch the order with the stuff we care about
+    // (shipments + stock transfers + available shipping methods)
+    const include = [
+      "market",
+      "line_items",
+      "shipments",
+      "shipments.stock_transfers",
+      "shipments.available_shipping_methods",
+      "shipments.shipping_method",
+    ].join(",")
 
-    if (!refreshRes.ok) {
+    const order = await clFetch(
+      `${base}/orders/${orderId}?include=${encodeURIComponent(include)}`,
+      accessToken,
+      {
+        method: "GET",
+      },
+    )
+
+    const included: any[] = Array.isArray(order.json?.included)
+      ? order.json.included
+      : []
+
+    const shipments = included.filter((r) => r?.type === "shipments")
+    const stockTransfers = included.filter((r) => r?.type === "stock_transfers")
+    const availShipMethods = included.filter(
+      (r) => r?.type === "shipping_methods",
+    )
+
+    const debug = {
+      refreshOk: refresh.ok,
+      refreshStatus: refresh.status,
+      orderFetchOk: order.ok,
+      orderFetchStatus: order.status,
+      shipmentsCount: shipments.length,
+      stockTransfersCount: stockTransfers.length,
+      availableShippingMethodsCount: availShipMethods.length,
+    }
+
+    console.log("[orders/refresh] result", { orderId, ...debug })
+
+    // If refresh failed, return its error (this is what you need in Vercel logs)
+    if (!refresh.ok) {
       return res.status(500).json({
         ok: false,
         error: "refresh_failed",
-        status: refreshRes.status,
-        body: refreshText.slice(0, 500),
+        debug,
+        refreshBody: refresh.json ?? refresh.text.slice(0, 1500),
       })
     }
 
-    return res.status(200).json({ ok: true })
+    // If refresh succeeded but nothing got generated, surface that clearly
+    return res.status(200).json({
+      ok: true,
+      debug,
+      // helpful when you need to see *why* it’s empty without digging in CL UI
+      refreshBody: refresh.json ?? refresh.text.slice(0, 800),
+    })
   } catch (e: any) {
+    console.error("[orders/refresh] server_error", e)
     return res.status(500).json({
       ok: false,
       error: "server_error",
