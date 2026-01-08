@@ -6,15 +6,8 @@ function env(name: string) {
   return v
 }
 
-/**
- * CL API base uses the ORGANIZATION SLUG (subdomain).
- * Prefer CL_SLUG. If CL_ORGANIZATION already equals the slug, fallback works.
- */
 function clApiBase() {
-  const slug =
-    process.env.CL_SLUG?.trim() || process.env.CL_ORGANIZATION?.trim()
-  if (!slug)
-    throw new Error("Missing env: CL_SLUG (or CL_ORGANIZATION as slug)")
+  const slug = env("CL_ORGANIZATION") // you said CL_ORGANIZATION == CL_SLUG, fine
   return `https://${slug}.commercelayer.io/api`
 }
 
@@ -25,8 +18,6 @@ async function mintIntegrationToken() {
     grant_type: "client_credentials",
     client_id: env("CL_INT_CLIENT_ID"),
     client_secret: env("CL_INT_CLIENT_SECRET"),
-    // If you use scopes for the integration app, uncomment:
-    // scope: process.env.CL_INT_SCOPE?.trim() || "",
   })
 
   const res = await fetch(tokenEndpoint, {
@@ -42,7 +33,7 @@ async function mintIntegrationToken() {
   const text = await res.text().catch(() => "")
   if (!res.ok) {
     throw new Error(
-      `[integration] token error: ${res.status} ${text.slice(0, 300)}`,
+      `[integration] token error: ${res.status} ${text.slice(0, 500)}`,
     )
   }
 
@@ -52,11 +43,7 @@ async function mintIntegrationToken() {
   return json.access_token as string
 }
 
-async function clFetch(
-  url: string,
-  accessToken: string,
-  init?: RequestInit,
-): Promise<{ ok: boolean; status: number; text: string; json: any | null }> {
+async function clFetch(url: string, accessToken: string, init?: RequestInit) {
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -69,7 +56,7 @@ async function clFetch(
   })
 
   const text = await res.text().catch(() => "")
-  let json: any | null = null
+  let json: any = null
   try {
     json = text ? JSON.parse(text) : null
   } catch {
@@ -90,9 +77,8 @@ export default async function handler(
 
   try {
     const orderId = String(req.query.orderId || "").trim()
-    if (!orderId) {
+    if (!orderId)
       return res.status(400).json({ ok: false, error: "missing_order_id" })
-    }
 
     const accessToken = await mintIntegrationToken()
     const base = clApiBase()
@@ -107,7 +93,7 @@ export default async function handler(
       },
     )
 
-    // 2) Fetch order with relationships we care about
+    // 2) Re-fetch with includes
     const include = [
       "market",
       "line_items",
@@ -126,7 +112,6 @@ export default async function handler(
     const included: any[] = Array.isArray(order.json?.included)
       ? order.json.included
       : []
-
     const shipments = included.filter((r) => r?.type === "shipments")
     const stockTransfers = included.filter((r) => r?.type === "stock_transfers")
     const shippingMethods = included.filter(
@@ -140,11 +125,10 @@ export default async function handler(
       orderFetchStatus: order.status,
       shipmentsCount: shipments.length,
       stockTransfersCount: stockTransfers.length,
-      shippingMethodsIncludedCount: shippingMethods.length,
+      shippingMethodsCount: shippingMethods.length,
     }
 
-    // eslint-disable-next-line no-console
-    console.log("[orders/refresh] result", { orderId, ...debug })
+    console.log("[orders/refresh]", { orderId, debug })
 
     if (!refresh.ok) {
       return res.status(500).json({
@@ -158,11 +142,8 @@ export default async function handler(
     return res.status(200).json({
       ok: true,
       debug,
-      // This is useful to see if CL says "refreshed" but still generated nothing
-      orderBody: order.json ?? order.text.slice(0, 1500),
     })
   } catch (e: any) {
-    // eslint-disable-next-line no-console
     console.error("[orders/refresh] server_error", e)
     return res.status(500).json({
       ok: false,
