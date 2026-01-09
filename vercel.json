@@ -1,7 +1,6 @@
 {
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/_next/:path*", "destination": "/_next/:path*" },
-    { "source": "/:path*", "destination": "/Order" }
+    { "source": "/:path*", "destination": "/" }
   ]
 }
