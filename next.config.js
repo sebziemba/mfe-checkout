@@ -8,7 +8,7 @@ const shouldAnalyzeBundles = process.env.ANALYZE === "true"
 let nextConfig = {
   reactStrictMode: true,
   output: process.env.NODE_ENV === "production" ? "export" : "standalone",
-  distDir: "out/dist",
+  distDir: "out",
   poweredByHeader: false,
   // When when app is exported as SPA and served in a sub-folder
   assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH
