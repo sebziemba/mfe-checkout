@@ -87,7 +87,13 @@ export const StepCustomer: React.FC<Props> = () => {
   }, [appCtx])
 
   const [disabledShipToDifferentAddress, setDisabledShipToDifferentAddress] =
-    useState(false)
+    useState(
+      !!(
+        appCtx?.shippingCountryCodeLock &&
+        appCtx?.billingAddress?.country_code &&
+        appCtx?.billingAddress?.country_code !== appCtx?.shippingCountryCodeLock
+      ),
+    )
 
   if (!appCtx || !accordionCtx) {
     return null
