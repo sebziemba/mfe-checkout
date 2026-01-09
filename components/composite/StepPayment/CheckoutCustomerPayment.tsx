@@ -7,6 +7,7 @@ import PaymentSource, {
 import { Label } from "components/ui/Label"
 import { type MouseEvent, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { EnsureStripePayment } from "./EnsureStripePayment"
 
 import { PaymentDetails } from "./PaymentDetails"
 import { PaymentSkeleton } from "./PaymentSkeleton"
@@ -111,24 +112,26 @@ export const CheckoutCustomerPayment: React.FC<Props> = ({
         <PaymentWrapper>
           <PaymentSummaryList hasTitle={hasTitle} />
           <PaymentSourceContainer data-testid="payment-source">
-            <PaymentSource
-              className="flex flex-col"
-              templateCustomerCards={(props) => (
-                <TemplateCustomerCards {...props} />
-              )}
-              templateCustomerSaveToWallet={(props) =>
-                hasSubscriptions ? (
-                  <></> // No save to wallet checkbox for subscriptions
-                ) : (
-                  <TemplateSaveToWalletCheckbox {...props} />
-                )
-              }
-              loader={<PaymentSkeleton />}
-            >
-              <PaymentDetailsWrapper>
-                <PaymentDetails hasEditButton />
-              </PaymentDetailsWrapper>
-            </PaymentSource>
+            <EnsureStripePayment>
+              <PaymentSource
+                className="flex flex-col"
+                templateCustomerCards={(props) => (
+                  <TemplateCustomerCards {...props} />
+                )}
+                templateCustomerSaveToWallet={(props) =>
+                  hasSubscriptions ? (
+                    <></> // No save to wallet checkbox for subscriptions
+                  ) : (
+                    <TemplateSaveToWalletCheckbox {...props} />
+                  )
+                }
+                loader={<PaymentSkeleton />}
+              >
+                <PaymentDetailsWrapper>
+                  <PaymentDetails hasEditButton />
+                </PaymentDetailsWrapper>
+              </PaymentSource>
+            </EnsureStripePayment>
           </PaymentSourceContainer>
         </PaymentWrapper>
       </PaymentMethod>

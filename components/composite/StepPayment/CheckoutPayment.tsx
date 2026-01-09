@@ -1,4 +1,5 @@
 import { PaymentMethod, PaymentSource } from "@commercelayer/react-components"
+import { EnsureStripePayment } from "./EnsureStripePayment"
 import { PaymentDetails } from "./PaymentDetails"
 import { PaymentSkeleton } from "./PaymentSkeleton"
 import { PaymentSummaryList } from "./PaymentSummaryList"
@@ -35,11 +36,16 @@ export const CheckoutPayment = ({
       <PaymentWrapper data-testid="payment-sources-container">
         <PaymentSummaryList hasTitle={hasTitle} />
         <PaymentSourceContainer data-testid="payment-source">
-          <PaymentSource className="flex flex-col" loader={<PaymentSkeleton />}>
-            <PaymentDetailsWrapper>
-              <PaymentDetails hasEditButton />
-            </PaymentDetailsWrapper>
-          </PaymentSource>
+          <EnsureStripePayment>
+            <PaymentSource
+              className="flex flex-col"
+              loader={<PaymentSkeleton />}
+            >
+              <PaymentDetailsWrapper>
+                <PaymentDetails hasEditButton />
+              </PaymentDetailsWrapper>
+            </PaymentSource>
+          </EnsureStripePayment>
         </PaymentSourceContainer>
       </PaymentWrapper>
     </PaymentMethod>
