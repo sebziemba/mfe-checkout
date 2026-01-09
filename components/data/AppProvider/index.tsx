@@ -71,7 +71,7 @@ const initialState: AppStateData = {
   hasPaymentMethod: false,
   isPaymentRequired: true,
   isCreditCard: false,
-  shippingCountryCodeLock: "",
+  shippingCountryCodeLock: "NL",
   isComplete: false,
   returnUrl: "",
   cartUrl: undefined,
