@@ -103,7 +103,7 @@ export const CouponOrGiftCard: React.FC<Props> = ({
             <CouponFieldWrapper>
               <StyledGiftCardOrCouponInput
                 data-testid="input_giftcard_coupon"
-                className={`form-input uppercase ${inputErrorClass}`}
+                className={`form-input ${inputErrorClass}`}
                 required={false}
                 placeholderTranslation={(codeType) =>
                   t(`orderRecap.${codeType}`)

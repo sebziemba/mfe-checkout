@@ -12,6 +12,7 @@ import type { AppProviderData } from "components/data/AppProvider"
 import useDeviceDetect from "components/hooks/useDeviceDetect"
 import { useSettingsOrInvalid } from "components/hooks/useSettingsOrInvalid"
 import { LINE_ITEMS_SHOPPABLE } from "components/utils/constants"
+import type React from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { CouponOrGiftCard } from "./CouponOrGiftCard"
 import { ExpireTimer } from "./ExpireTimer"
@@ -40,6 +41,8 @@ interface Props {
   expirationInfo?: NullableType<ExpirationInfo>
 }
 
+const NL_VAT_RATE = 0.21
+
 export const OrderSummary: React.FC<Props> = ({
   appCtx,
   readonly,
@@ -48,7 +51,7 @@ export const OrderSummary: React.FC<Props> = ({
   expiresAt,
   expirationInfo,
 }) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { isMobile } = useDeviceDetect()
   const { settings } = useSettingsOrInvalid()
 
@@ -58,6 +61,24 @@ export const OrderSummary: React.FC<Props> = ({
       appCtx.hasShippingAddress &&
       appCtx.hasShippingMethod
     : appCtx.hasBillingAddress
+
+  // We'll capture subtotal cents during render via SubTotalAmount render-prop
+  let subtotalCentsSnapshot = 0
+
+  const formatMoneyFromCents = (cents: number) => {
+    const currency =
+      // try common places in appCtx; fallback to EUR
+      (appCtx as any)?.order?.currency_code ??
+      (appCtx as any)?.order?.currencyCode ??
+      "EUR"
+
+    const amount = cents / 100
+
+    return new Intl.NumberFormat(i18n.language || "nl-NL", {
+      style: "currency",
+      currency,
+    }).format(amount)
+  }
 
   const lineItems = !readonly ? (
     <SummaryHeader>
@@ -85,24 +106,24 @@ export const OrderSummary: React.FC<Props> = ({
       </SummarySubTitle>
     </SummaryHeader>
   ) : null
+
   return (
     <Wrapper data-testid="order-summary">
       <LineItemsContainer>
         <>
           {lineItems}
-          {
-            <>
-              {LINE_ITEMS_SHOPPABLE.map((type) => (
-                <LineItemTypes
-                  type={type}
-                  key={type}
-                  hideItemCodes={hideItemCodes}
-                />
-              ))}
-            </>
-          }
+          <>
+            {LINE_ITEMS_SHOPPABLE.map((type) => (
+              <LineItemTypes
+                type={type}
+                key={type}
+                hideItemCodes={hideItemCodes}
+              />
+            ))}
+          </>
         </>
       </LineItemsContainer>
+
       <TotalWrapper>
         <AmountSpacer />
         <AmountWrapper>
@@ -112,10 +133,21 @@ export const OrderSummary: React.FC<Props> = ({
               setCouponOrGiftCard={appCtx.setCouponOrGiftCard}
             />
           )}
+
           <RecapLine>
             <RecapLineItem>{t("orderRecap.subtotal_amount")}</RecapLineItem>
-            <SubTotalAmount />
+
+            {/* Capture subtotal cents so we can estimate VAT even before Stripe tax exists */}
+            <SubTotalAmount>
+              {(props) => {
+                if (typeof props.priceCents === "number") {
+                  subtotalCentsSnapshot = props.priceCents
+                }
+                return <>{props.price}</>
+              }}
+            </SubTotalAmount>
           </RecapLine>
+
           <DiscountAmount>
             {(props) => {
               if (props.priceCents === 0) return <></>
@@ -129,6 +161,7 @@ export const OrderSummary: React.FC<Props> = ({
               )
             }}
           </DiscountAmount>
+
           <AdjustmentAmount>
             {(props) => {
               if (props.priceCents === 0) return <></>
@@ -176,9 +209,23 @@ export const OrderSummary: React.FC<Props> = ({
               )
             }}
           </PaymentMethodAmount>
+
+          {/* VAT / Taxes row */}
           <RecapLine>
             <TaxesAmount>
               {(props) => {
+                const shouldEstimateVat =
+                  // only estimate when prices are tax-exclusive
+                  !appCtx.taxIncluded &&
+                  // only estimate before Stripe/CL calc is ready
+                  !isTaxCalculated
+
+                const estimatedVatCents = Math.round(
+                  subtotalCentsSnapshot * NL_VAT_RATE,
+                )
+                const estimatedVatFormatted =
+                  formatMoneyFromCents(estimatedVatCents)
+
                 return (
                   <>
                     <RecapLineItem>
@@ -204,9 +251,19 @@ export const OrderSummary: React.FC<Props> = ({
                             : {}
                         }
                       />
+                      {shouldEstimateVat && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-gray-300 px-2 py-0.5 text-[11px] text-gray-600">
+                          {t("general.estimated", "Estimated")} 21%
+                        </span>
+                      )}
                     </RecapLineItem>
+
                     <div data-testid="tax-amount">
-                      {isTaxCalculated ? props.price : t("orderRecap.notSet")}
+                      {isTaxCalculated
+                        ? props.price
+                        : shouldEstimateVat
+                          ? estimatedVatFormatted
+                          : t("orderRecap.notSet")}
                     </div>
                   </>
                 )
@@ -227,6 +284,7 @@ export const OrderSummary: React.FC<Props> = ({
               )
             }}
           </GiftCardAmount>
+
           <RecapLineTotal>
             <RecapLineItemTotal>
               {t("orderRecap.total_amount")}
@@ -236,6 +294,7 @@ export const OrderSummary: React.FC<Props> = ({
               className="text-xl font-medium"
             />
           </RecapLineTotal>
+
           {!appCtx.isComplete && <ReturnToCart cartUrl={appCtx.cartUrl} />}
         </AmountWrapper>
       </TotalWrapper>

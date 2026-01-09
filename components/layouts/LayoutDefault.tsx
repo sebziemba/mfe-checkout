@@ -58,7 +58,7 @@ export const LayoutDefault: FC<Props> = ({ main, aside }) => {
           ].join(" ")}
         >
           <div className="flex-none md:flex-1">{aside}</div>
-          <div className="flex-none md:flex-1 justify-center order-first md:order-last">
+          <div className="flex-none md:flex-1 justify-center order-last md:order-last">
             <Card fullHeight>{main}</Card>
           </div>
         </div>
