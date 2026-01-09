@@ -147,7 +147,7 @@ const Checkout: React.FC<Props> = ({
               <Logo
                 logoUrl={logoUrl}
                 companyName={companyName}
-                className="hidden md:block"
+                className="hidden md:block max-w-[90px]!"
               />
               <div className="flex-1">
                 <OrderSummary
@@ -158,7 +158,6 @@ const Checkout: React.FC<Props> = ({
                   expirationInfo={expirationInfo}
                 />
               </div>
-              <Footer />
             </div>
           }
           main={

@@ -14,7 +14,7 @@ export const ReturnToCart = ({ cartUrl }: Props) => {
       className="flex flex-row justify-between mt-7 pt-6 border-t"
       data-testid="edit-cart-link"
     >
-      <a href={cartUrl} className="text-xs font-bold border-b">
+      <a href={cartUrl} className="text-xs font-normal border-b">
         <>&lt;</> {t("orderRecap.returnToCart")}
       </a>
     </div>
