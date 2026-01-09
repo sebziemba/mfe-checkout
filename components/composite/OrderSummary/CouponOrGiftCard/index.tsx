@@ -108,6 +108,10 @@ export const CouponOrGiftCard: React.FC<Props> = ({
                 placeholderTranslation={(codeType) =>
                   t(`orderRecap.${codeType}`)
                 }
+                onChangeCapture={(e) => {
+                  const input = e.target as HTMLInputElement
+                  input.value = input.value.toUpperCase()
+                }}
               />
               <StyledGiftCardOrCouponSubmit
                 data-testid="submit_giftcard_coupon"
