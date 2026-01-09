@@ -11,7 +11,7 @@ export const ShippingTitle: FC<HTMLAttributes<HTMLHeadingElement>> = (
 ) => (
   <h4
     {...props}
-    className={`font-bold text-md mb-2 ${props.className || ""}`}
+    className={`font-medium text-md mb-2 ${props.className || ""}`}
   />
 )
 
@@ -24,7 +24,7 @@ export const ShippingSummaryItem: FC<HTMLAttributes<HTMLDivElement>> = (
 ) => (
   <div
     {...props}
-    className={`flex flex-1 font-bold ml-2 flex-col md:flex-row ${props.className || ""}`}
+    className={`flex flex-1 font-medium ml-2 flex-col md:flex-row ${props.className || ""}`}
   />
 )
 
@@ -42,7 +42,7 @@ export const ShippingSummaryValue: FC<HTMLAttributes<HTMLParagraphElement>> = (
 ) => (
   <p
     {...props}
-    className={`text-black font-bold uppercase text-sm pt-2 ${props.className || ""}`}
+    className={`text-black font-medium uppercase text-sm pt-2 ${props.className || ""}`}
   />
 )
 
@@ -61,7 +61,7 @@ export const ShippingLineItemTitle: FC<HTMLAttributes<HTMLHeadingElement>> = (
 ) => (
   <h5
     {...props}
-    className={`text-black text-sm font-bold ${props.className || ""}`}
+    className={`text-black text-sm font-medium ${props.className || ""}`}
   />
 )
 

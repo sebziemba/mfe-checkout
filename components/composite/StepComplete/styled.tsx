@@ -81,7 +81,7 @@ export const RecapItemTitle: FC<React.HTMLAttributes<HTMLHeadingElement>> = (
 
 export const RecapItem: FC<React.HTMLAttributes<HTMLParagraphElement>> = (
   props,
-) => <p {...props} className="text-md font-bold" />
+) => <p {...props} className="text-md font-medium" />
 
 export const RecapItemDescription: FC<
   React.HTMLAttributes<HTMLParagraphElement>

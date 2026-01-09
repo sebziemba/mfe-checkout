@@ -9,6 +9,6 @@ export const ErrorCode: FC<React.HTMLAttributes<HTMLParagraphElement>> = (
 ) => (
   <p
     {...props}
-    className="p-4 text-xl font-bold border-gray-300 text-gray-800 border-b md:border-r md:border-b-0"
+    className="p-4 text-xl font-medium border-gray-300 text-gray-800 border-b md:border-r md:border-b-0"
   />
 )

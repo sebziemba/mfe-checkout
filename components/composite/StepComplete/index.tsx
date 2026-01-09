@@ -194,7 +194,7 @@ export const StepComplete: React.FC<Props> = ({
                   <RecapItemTitle>{t("stepComplete.payment")}</RecapItemTitle>
                   {ctx.isPaymentRequired ? (
                     <RecapBox>
-                      <FlexContainer className="font-bold text-md">
+                      <FlexContainer className="font-medium text-md">
                         <PaymentContainer>
                           <PaymentSource readonly>
                             <PaymentSourceBrandIcon className="mr-2" />

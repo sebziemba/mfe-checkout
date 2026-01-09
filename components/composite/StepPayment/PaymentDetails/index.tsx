@@ -27,7 +27,7 @@ export const PaymentDetails: React.FC<Props> = ({ hasEditButton = false }) => {
   return (
     <Fragment>
       <div className="flex flex-col lg:items-center lg:flex-row">
-        <div className="flex items-center font-bold">
+        <div className="flex items-center font-medium">
           <PaymentSourceBrandIcon className="mr-2" />
           <PaymentSourceBrandName className="mr-1">
             {(p) => {
@@ -55,7 +55,7 @@ export const PaymentDetails: React.FC<Props> = ({ hasEditButton = false }) => {
         <div className="ml-10 lg:ml-3">
           <PaymentSourceEditButton
             label={t("general.edit")}
-            className="text-sm font-bold leading-none border-b text-primary border-black/10 md: transition ease-in duration-200 hover:border-black/50 hover:text-primary-dark focus:outline-hidden"
+            className="text-sm font-medium leading-none border-b text-primary border-black/10 md: transition ease-in duration-200 hover:border-black/50 hover:text-primary-dark focus:outline-hidden"
           />
         </div>
       )}

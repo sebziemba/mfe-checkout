@@ -51,7 +51,7 @@ export const ExpireTimer: React.FC<{
           </svg>
           {t("orderRecap.timer.title")}
         </div>
-        <div className="flex gap-1 text-gray-900 items-center text-md font-bold">
+        <div className="flex gap-1 text-gray-900 items-center text-md font-medium">
           <div className="flex items-center justify-center px-2 py-1 bg-gray-100 rounded w-9">
             {hours.toString().padStart(2, "0")}
           </div>

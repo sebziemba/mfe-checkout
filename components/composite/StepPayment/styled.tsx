@@ -19,7 +19,7 @@ export const PaymentSummaryItem: FC<HTMLAttributes<HTMLDivElement>> = (
 ) => (
   <div
     {...props}
-    className={`flex flex-1 font-bold leading-none ${props.className || ""}`}
+    className={`flex flex-1 font-medium leading-none ${props.className || ""}`}
   />
 )
 
@@ -32,7 +32,7 @@ export const PaymentSummaryValue: FC<HTMLAttributes<HTMLParagraphElement>> = (
 ) => (
   <p
     {...props}
-    className={`flex font-bold uppercase text-ss leading-8 ${props.className || ""}`}
+    className={`flex font-medium uppercase text-ss leading-8 ${props.className || ""}`}
   />
 )
 
@@ -55,7 +55,9 @@ export const PaymentDetailsWrapper: FC<HTMLAttributes<HTMLDivElement>> = (
 
 export const PaymentItemTitle: FC<HTMLAttributes<HTMLHeadingElement>> = (
   props,
-) => <h5 {...props} className={`text-sm font-bold ${props.className || ""}`} />
+) => (
+  <h5 {...props} className={`text-sm font-medium ${props.className || ""}`} />
+)
 
 export const ShippingLineItemQty: FC<HTMLAttributes<HTMLParagraphElement>> = (
   props,

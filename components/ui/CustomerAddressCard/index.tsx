@@ -78,7 +78,7 @@ export const CustomAddress = ({
   addressType,
 }: AddressProps) => (
   <>
-    <p className="font-bold text-md" data-testid={`fullname_${addressType}`}>
+    <p className="font-medium text-md" data-testid={`fullname_${addressType}`}>
       {firstName} {lastName}
     </p>
     <p

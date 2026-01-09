@@ -26,7 +26,7 @@ export const CouponRecap: FC<React.HTMLAttributes<HTMLDivElement>> = (
 
 export const CouponName: FC<React.HTMLAttributes<HTMLParagraphElement>> = (
   props,
-) => <p {...props} className="font-bold" />
+) => <p {...props} className="font-medium" />
 
 export const StyledGiftCardOrCouponRemoveButton: FC<
   React.ComponentProps<typeof GiftCardOrCouponRemoveButton>
