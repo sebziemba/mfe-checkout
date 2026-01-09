@@ -70,7 +70,7 @@ export const ShippingLineItemQty: FC<HTMLAttributes<HTMLParagraphElement>> = (
 ) => (
   <p
     {...props}
-    className={`text-xs font-semibold text-gray-400 lowercase pt-1 first-letter:uppercase ${props.className || ""}`}
+    className={`text-xs font-medium text-gray-400 lowercase pt-1 first-letter:uppercase ${props.className || ""}`}
   />
 )
 

@@ -32,7 +32,7 @@ export const MainHeader: FC<Props> = ({
           </p>
         </div>
         {/* Total */}
-        <div className="font-bold text-xl md:hidden">
+        <div className="font-medium text-xl md:hidden">
           <TotalAmount />
         </div>
       </div>

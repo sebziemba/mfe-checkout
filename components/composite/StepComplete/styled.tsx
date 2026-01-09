@@ -28,10 +28,7 @@ export const Wrapper: FC<React.HTMLAttributes<HTMLDivElement>> = (props) => (
 )
 
 export const Title: FC<React.HTMLAttributes<HTMLHeadingElement>> = (props) => (
-  <h1
-    {...props}
-    className="text-black text-2xl lg:text-4xl font-semibold mb-4"
-  />
+  <h1 {...props} className="text-black text-2xl lg:text-4xl font-medium mb-4" />
 )
 
 export const Text: FC<React.HTMLAttributes<HTMLParagraphElement>> = (props) => (
@@ -67,7 +64,7 @@ export const RecapTitle: FC<React.HTMLAttributes<HTMLHeadingElement>> = (
 ) => (
   <h2
     {...props}
-    className="text-black text-lg font-semibold leading-none mb-8 md:mb-16"
+    className="text-black text-lg font-medium leading-none mb-8 md:mb-16"
   />
 )
 
@@ -85,7 +82,7 @@ export const RecapItem: FC<React.HTMLAttributes<HTMLParagraphElement>> = (
 
 export const RecapItemDescription: FC<
   React.HTMLAttributes<HTMLParagraphElement>
-> = (props) => <p {...props} className="text-sm font-semibold" />
+> = (props) => <p {...props} className="text-sm font-medium" />
 
 export const RecapBox: FC<React.HTMLAttributes<HTMLDivElement>> = (props) => (
   <div {...props} className="p-3 rounded-sm border" />

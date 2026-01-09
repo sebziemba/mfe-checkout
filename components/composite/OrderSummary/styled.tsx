@@ -37,7 +37,7 @@ export const RecapLine: FC<React.HTMLAttributes<HTMLDivElement>> = (props) => (
 
 export const RecapLineItem: FC<React.HTMLAttributes<HTMLParagraphElement>> = (
   props,
-) => <p {...props} className="font-semibold" />
+) => <p {...props} className="font-medium" />
 
 export const RecapLineTotal: FC<React.HTMLAttributes<HTMLDivElement>> = (
   props,
@@ -51,5 +51,5 @@ export const RecapLineTotal: FC<React.HTMLAttributes<HTMLDivElement>> = (
 export const RecapLineItemTotal: FC<
   React.HTMLAttributes<HTMLParagraphElement>
 > = (props) => (
-  <p {...props} className="text-xl font-semibold invisible lg:visible" />
+  <p {...props} className="text-xl font-medium invisible lg:visible" />
 )

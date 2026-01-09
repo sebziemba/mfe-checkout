@@ -68,7 +68,7 @@ const StepPlaceOrder: React.FC<Props> = ({
     <>
       {appCtx.hasSubscriptions && isActive && (
         <div
-          className={`text-gray-500 font-semibold p-4 m-5 mb-0 md:mb-5 md:mx-0 text-sm border border-dashed ${
+          className={`text-gray-500 font-medium p-4 m-5 mb-0 md:mb-5 md:mx-0 text-sm border border-dashed ${
             !appCtx.isGuest ? "" : "border-orange-400"
           }`}
         >

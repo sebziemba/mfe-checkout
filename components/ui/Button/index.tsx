@@ -6,7 +6,7 @@ export const ButtonCss = [
   // Spacing and size
   "p-3",
   // Typography
-  "text-xs font-extrabold text-contrast",
+  "text-xs font-medium text-contrast",
   // Colors and borders
   "bg-primary border border-primary rounded-md",
   // Transitions

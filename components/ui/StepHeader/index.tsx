@@ -20,7 +20,7 @@ export const StepHeader: React.FC<Props> = ({
         <div className="flex items-center mb-0.5">
           <Badge status={status} stepNumber={stepNumber} />
           <h2
-            className="text-lg font-semibold leading-none pl-2"
+            className="text-lg font-medium leading-none pl-2"
             data-testid="step-header-customer"
           >
             {label}

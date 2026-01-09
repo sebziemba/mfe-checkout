@@ -34,7 +34,7 @@ export const ExpireTimer: React.FC<{
       className="border border-dashed border-primary-light rounded-lg p-4 mb-4 md:mb-8 bg-white max-w"
     >
       <div className="flex items-center justify-between text-xs gap-1 border-b border-dashed pb-2">
-        <div className="flex items-center gap-2 font-semibold">
+        <div className="flex items-center gap-2 font-medium">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"

@@ -53,7 +53,7 @@ export const StepExpired: React.FC<Props> = ({
             <div className="p-8">
               <ExpiredIcon />
             </div>
-            <h1 className="text-black text-2xl lg:text-4xl font-semibold mb-4">
+            <h1 className="text-black text-2xl lg:text-4xl font-medium mb-4">
               {t("orderRecap.timer.error")}
             </h1>
             <p data-testid="expired-message" className="py-2 text-gray-400">
