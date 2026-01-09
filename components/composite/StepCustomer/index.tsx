@@ -1,6 +1,7 @@
 // components/composite/StepCustomer/index.tsx
 
 import type { Order } from "@commercelayer/sdk"
+import { CommerceLayer } from "@commercelayer/sdk"
 import classNames from "classnames"
 import { AccordionContext } from "components/data/AccordionProvider"
 import { AppContext } from "components/data/AppProvider"
@@ -12,6 +13,39 @@ import { useTranslation } from "react-i18next"
 
 import { CheckoutAddresses } from "./CheckoutAddresses"
 import { CheckoutCustomerAddresses } from "./CheckoutCustomerAddresses"
+
+/**
+ * Helper: get access token from ?accessToken=... in URL
+ * (Sales Channel token passed from /checkout/start)
+ */
+function getAccessTokenFromUrl(): string | null {
+  if (typeof window === "undefined") return null
+  const url = new URL(window.location.href)
+  return url.searchParams.get("accessToken")
+}
+
+/**
+ * Helper: build a Commerce Layer client using Sales Channel token
+ * This runs CLIENT-SIDE only.
+ */
+function getClientSideCL(accessToken: string) {
+  const organization =
+    process.env.NEXT_PUBLIC_CL_SLUG || process.env.NEXT_PUBLIC_CL_ORGANIZATION
+
+  if (!organization) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_CL_SLUG or NEXT_PUBLIC_CL_ORGANIZATION",
+    )
+  }
+
+  const domain = process.env.NEXT_PUBLIC_CL_DOMAIN
+
+  return CommerceLayer({
+    organization,
+    accessToken,
+    ...(domain ? { domain } : {}),
+  })
+}
 
 interface Props {
   className?: string
@@ -156,41 +190,117 @@ export const StepCustomer: React.FC<Props> = ({ className }) => {
     return { res, json }
   }
 
+  /**
+   * Trigger allocation by updating the order with autorefresh:true
+   * using Sales Channel token (client-side), then re-fetch and log allocation state.
+   */
+  const triggerAutorefreshAndInspect = async (orderId: string) => {
+    const accessToken = getAccessTokenFromUrl()
+    if (!accessToken) {
+      console.warn(
+        "[StepCustomer] Missing accessToken in URL; cannot autorefresh",
+      )
+      return { ok: false as const, reason: "missing_access_token" as const }
+    }
+
+    const cl = getClientSideCL(accessToken)
+
+    // 1) Trigger allocation
+    console.log("[StepCustomer] triggering autorefresh update", { orderId })
+    await cl.orders.update({
+      type: "orders",
+      id: orderId,
+      autorefresh: true,
+    } as any)
+
+    // 2) Re-fetch the order and inspect shipments/transfers
+    const fresh = await cl.orders.retrieve(orderId, {
+      include: [
+        "line_items",
+        "shipments",
+        "shipments.stock_transfers",
+        "shipments.stock_location",
+        "shipments.shipping_method",
+        "shipments.available_shipping_methods",
+      ],
+    } as any)
+
+    const shipments = (fresh as any)?.shipments ?? []
+
+    const summary = shipments.map((s: any) => ({
+      shipmentId: s?.id,
+      status: s?.status,
+      shippingMethodId: s?.shipping_method?.id ?? null,
+      availableShippingMethodsCount: s?.available_shipping_methods?.length ?? 0,
+      stockLocationId: s?.stock_location?.id ?? null,
+      stockTransfersCount: s?.stock_transfers?.length ?? 0,
+      stockTransferIds: (s?.stock_transfers ?? [])
+        .map((t: any) => t?.id)
+        .filter(Boolean),
+    }))
+
+    console.log("[StepCustomer] allocation check", {
+      orderId,
+      shipmentsCount: shipments.length,
+      shipments: summary,
+    })
+
+    return { ok: true as const, fresh, summary }
+  }
+
   const handleSave = async (params: { success: boolean; order?: Order }) => {
     if (!appCtx) return
-
     setIsLocalLoader(true)
 
     try {
-      // 1) Always push address changes into context first
+      // 1) Update provider state first
       const orderToUse = params?.order ?? (await appCtx.getOrderFromRef())
       await appCtx.setAddresses(orderToUse)
 
-      // 2) If shipping is required, force refresh allocation server-side
-      if (!appCtx.isShipmentRequired) return
-
       const orderId = orderToUse?.id || appCtx.orderId
-      if (!orderId) return
+      if (!orderId) {
+        console.warn("[StepCustomer] missing orderId")
+        return
+      }
 
-      // avoid double POSTs for same order during rapid renders
-      if (lastRefreshOrderIdRef.current === orderId) return
+      // 2) Only do allocation trigger when shipment is required
+      if (!appCtx.isShipmentRequired) {
+        console.log(
+          "[StepCustomer] shipment not required, skipping allocation trigger",
+        )
+        return
+      }
+
+      // Prevent double-triggering for same order
+      if (lastRefreshOrderIdRef.current === orderId) {
+        console.log(
+          "[StepCustomer] autorefresh already triggered for this order",
+          { orderId },
+        )
+        return
+      }
       lastRefreshOrderIdRef.current = orderId
 
-      const { res, json } = await callOrderRefreshEndpoint(orderId)
+      // 3) Trigger allocation + inspect result
+      const result = await triggerAutorefreshAndInspect(orderId)
 
-      // 3) If refresh OK, re-fetch order into context (no hard reload)
-      if (res.ok && json?.ok) {
-        const refreshed = await appCtx.getOrderFromRef()
-        await appCtx.setAddresses(refreshed)
+      // 4) If CL created transfers, reload so UI proceeds
+      if (result.ok) {
+        const totalTransfers = (result.summary ?? []).reduce(
+          (acc: number, s: any) => acc + (s.stockTransfersCount ?? 0),
+          0,
+        )
 
-        // Optional: close the accordion step if your provider supports it.
-        // If this causes TS issues in your project, delete these 2 lines.
-        try {
-          // @ts-expect-error - depends on your AccordionProvider typings
-          accordionCtx.setStep?.()
-        } catch {
-          // ignore
+        if (totalTransfers > 0) {
+          console.log("[StepCustomer] transfers exist, reloading")
+          window.location.reload()
+          return
         }
+
+        // If still 0 transfers, this is a CL allocation failure.
+        console.warn(
+          "[StepCustomer] STILL 0 stock transfers after autorefresh — allocation failed in CL",
+        )
       }
     } catch (e) {
       console.warn("[StepCustomer] handleSave exception", e)
