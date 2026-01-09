@@ -1,5 +1,6 @@
+// components/composite/StepCustomer/index.tsx
+
 import type { Order } from "@commercelayer/sdk"
-import { CommerceLayer } from "@commercelayer/sdk"
 import classNames from "classnames"
 import { AccordionContext } from "components/data/AccordionProvider"
 import { AppContext } from "components/data/AppProvider"
@@ -26,55 +27,19 @@ export interface ShippingToggleProps {
   disableToggle: boolean
 }
 
-/**
- * Legacy helper kept for compatibility.
- * In your current flow we do NOT force/disable anything here.
- */
 interface EvaluateConditionsProps {
   countryCode?: string
   shippingCountryCodeLock: string | null | undefined
 }
 
+/**
+ * Legacy helper kept for compatibility.
+ * In your current flow we do NOT force/disable anything here.
+ */
 export function evaluateShippingToggle(
   _args: EvaluateConditionsProps,
 ): ShippingToggleProps {
   return { disableToggle: false }
-}
-
-/**
- * Helper: get access token from ?accessToken=... in URL
- * (MFE checkout uses this for the Sales Channel token)
- */
-function getAccessTokenFromUrl(): string | null {
-  if (typeof window === "undefined") return null
-  const url = new URL(window.location.href)
-  return url.searchParams.get("accessToken")
-}
-
-/**
- * Helper: build a CL client for client-side calls (Sales Channel token)
- * - organization: from NEXT_PUBLIC_CL_SLUG (or NEXT_PUBLIC_CL_ORGANIZATION)
- * - domain: optional (if you use custom domain), from NEXT_PUBLIC_CL_DOMAIN
- */
-function getClientSideCL(accessToken: string) {
-  const organization =
-    process.env.NEXT_PUBLIC_CL_SLUG?.trim() ||
-    process.env.NEXT_PUBLIC_CL_ORGANIZATION?.trim() ||
-    ""
-
-  if (!organization) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_CL_SLUG (or NEXT_PUBLIC_CL_ORGANIZATION)",
-    )
-  }
-
-  const domain = process.env.NEXT_PUBLIC_CL_DOMAIN?.trim() || undefined
-
-  return CommerceLayer({
-    organization,
-    accessToken,
-    ...(domain ? { domain } : {}),
-  })
 }
 
 export const StepHeaderCustomer: React.FC<Props> = ({ step }) => {
@@ -126,8 +91,8 @@ export const StepCustomer: React.FC<Props> = ({ className }) => {
 
   const [isLocalLoader, setIsLocalLoader] = useState(false)
 
-  // Prevent double-triggering allocation for the same order id
-  const lastAutorefreshOrderIdRef = useRef<string | null>(null)
+  // prevent double refresh calls for the same order within one save cycle
+  const lastRefreshOrderIdRef = useRef<string | null>(null)
 
   /**
    * NEW meaning:
@@ -155,37 +120,40 @@ export const StepCustomer: React.FC<Props> = ({ className }) => {
     setDisabledShipToDifferentAddress(false)
   }, [appCtx?.shippingCountryCodeLock, appCtx?.billingAddress?.country_code])
 
+  /**
+   * Compatibility prop for children.
+   * In your flow this is intentionally a no-op.
+   */
   const openShippingAddress = (_props: ShippingToggleProps) => {
     // no-op
   }
 
   /**
-   * ✅ THE FIX:
-   * After saving addresses, force an ORDER UPDATE with autorefresh:true
-   * using the Sales Channel token (client-side).
-   *
-   * This is the only reliable way to trigger shipments/stock transfers allocation
-   * in your setup (since POST /_refresh returns 404).
+   * Calls your Next.js API route:
+   * POST /api/orders/:orderId/refresh
    */
-  const triggerAutorefreshUpdate = async (orderId: string) => {
-    const accessToken = getAccessTokenFromUrl()
-    if (!accessToken) {
-      console.warn(
-        "[StepCustomer] Missing accessToken in URL; cannot autorefresh",
-      )
-      return
-    }
+  const callOrderRefreshEndpoint = async (orderId: string) => {
+    const refreshUrl = new URL(
+      `/api/orders/${orderId}/refresh`,
+      window.location.origin,
+    ).toString()
 
-    const cl = getClientSideCL(accessToken)
+    const res = await fetch(refreshUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      credentials: "same-origin",
+    })
 
-    console.log("[StepCustomer] triggering autorefresh update", { orderId })
+    const json = await res.json().catch(() => null)
 
-    // Minimal update that triggers allocation
-    await cl.orders.update({
-      type: "orders",
-      id: orderId,
-      autorefresh: true,
-    } as any)
+    console.log("[StepCustomer] refresh response", {
+      status: res.status,
+      ok: res.ok,
+      json,
+    })
+
+    return { res, json }
   }
 
   const handleSave = async (params: { success: boolean; order?: Order }) => {
@@ -194,30 +162,34 @@ export const StepCustomer: React.FC<Props> = ({ className }) => {
     setIsLocalLoader(true)
 
     try {
-      // 1) Update the AppProvider state first
+      // 1) Always push address changes into context first
       const orderToUse = params?.order ?? (await appCtx.getOrderFromRef())
-
       await appCtx.setAddresses(orderToUse)
 
-      // 2) If shipment required, trigger allocation
-      // We must use a REAL order update (autorefresh:true)
+      // 2) If shipping is required, force refresh allocation server-side
+      if (!appCtx.isShipmentRequired) return
+
       const orderId = orderToUse?.id || appCtx.orderId
+      if (!orderId) return
 
-      if (
-        appCtx.isShipmentRequired &&
-        orderId &&
-        lastAutorefreshOrderIdRef.current !== orderId
-      ) {
-        lastAutorefreshOrderIdRef.current = orderId
+      // avoid double POSTs for same order during rapid renders
+      if (lastRefreshOrderIdRef.current === orderId) return
+      lastRefreshOrderIdRef.current = orderId
 
+      const { res, json } = await callOrderRefreshEndpoint(orderId)
+
+      // 3) If refresh OK, re-fetch order into context (no hard reload)
+      if (res.ok && json?.ok) {
+        const refreshed = await appCtx.getOrderFromRef()
+        await appCtx.setAddresses(refreshed)
+
+        // Optional: close the accordion step if your provider supports it.
+        // If this causes TS issues in your project, delete these 2 lines.
         try {
-          await triggerAutorefreshUpdate(orderId)
-          console.log("[StepCustomer] autorefresh update done; reloading")
-          window.location.reload()
-          return
-        } catch (e) {
-          console.warn("[StepCustomer] autorefresh update failed", e)
-          // If this fails, we still continue (UI will show errors)
+          // @ts-expect-error - depends on your AccordionProvider typings
+          accordionCtx.setStep?.()
+        } catch {
+          // ignore
         }
       }
     } catch (e) {

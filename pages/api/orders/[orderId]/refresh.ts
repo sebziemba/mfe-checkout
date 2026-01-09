@@ -1,3 +1,4 @@
+// pages/api/orders/[orderId]/refresh.ts
 import type { NextApiRequest, NextApiResponse } from "next"
 
 function env(name: string) {
@@ -6,12 +7,16 @@ function env(name: string) {
   return v
 }
 
+/**
+ * Uses ORGANIZATION SLUG (subdomain)
+ * e.g. bubbels-van-frits-2  -> https://bubbels-van-frits-2.commercelayer.io/api
+ */
 function clApiBase() {
   const slug =
     process.env.CL_SLUG?.trim() || process.env.CL_ORGANIZATION?.trim() || ""
   if (!slug)
     throw new Error("Missing env: CL_SLUG (or CL_ORGANIZATION as slug)")
-  return { slug, base: `https://${slug}.commercelayer.io/api` }
+  return `https://${slug}.commercelayer.io/api`
 }
 
 async function mintIntegrationToken() {
@@ -36,17 +41,22 @@ async function mintIntegrationToken() {
   const text = await res.text().catch(() => "")
   if (!res.ok) {
     throw new Error(
-      `[integration] token error: ${res.status} ${text.slice(0, 800)}`,
+      `[integration] token error: ${res.status} ${text.slice(0, 300)}`,
     )
   }
 
   const json = JSON.parse(text)
-  if (!json?.access_token)
+  if (!json?.access_token) {
     throw new Error("[integration] token missing access_token")
+  }
   return json.access_token as string
 }
 
-async function clFetch(url: string, accessToken: string, init?: RequestInit) {
+async function clFetch(
+  url: string,
+  accessToken: string,
+  init?: RequestInit,
+): Promise<{ ok: boolean; status: number; text: string; json: any | null }> {
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -59,7 +69,7 @@ async function clFetch(url: string, accessToken: string, init?: RequestInit) {
   })
 
   const text = await res.text().catch(() => "")
-  let json: any = null
+  let json: any | null = null
   try {
     json = text ? JSON.parse(text) : null
   } catch {
@@ -73,40 +83,35 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  // Always return JSON (so Network tab is useful)
-  res.setHeader("Content-Type", "application/json; charset=utf-8")
-
+  // ✅ allow POST (your frontend uses POST)
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST")
     return res.status(405).json({ ok: false, error: "method_not_allowed" })
   }
 
   const orderId = String(req.query.orderId || "").trim()
+  if (!orderId) {
+    return res.status(400).json({ ok: false, error: "missing_order_id" })
+  }
 
   try {
-    if (!orderId) {
-      return res.status(400).json({ ok: false, error: "missing_order_id" })
-    }
-
-    const { slug, base } = clApiBase()
-    console.log("[refresh] using org slug:", slug)
-    console.log("[refresh] base:", base)
-    console.log("[refresh] orderId:", orderId)
-
     const accessToken = await mintIntegrationToken()
-    console.log("[refresh] integration token ok", accessToken.slice(0, 12))
+    const base = clApiBase()
 
-    // 1) refresh
-    const refresh = await clFetch(
-      `${base}/orders/${orderId}/_refresh`,
-      accessToken,
-      {
-        method: "POST",
-        body: JSON.stringify({}),
-      },
-    )
+    // ✅ Correct "manual refresh": PATCH order with the _refresh trigger attribute
+    // (Docs: "force a refresh manually ... passing the _refresh trigger attribute")
+    const refresh = await clFetch(`${base}/orders/${orderId}`, accessToken, {
+      method: "PATCH",
+      body: JSON.stringify({
+        data: {
+          type: "orders",
+          id: orderId,
+          _refresh: true,
+        },
+      }),
+    })
 
-    // 2) fetch with includes
+    // Re-fetch with what we care about
     const include = [
       "market",
       "line_items",
@@ -126,6 +131,7 @@ export default async function handler(
     const included: any[] = Array.isArray(order.json?.included)
       ? order.json.included
       : []
+
     const shipments = included.filter((r) => r?.type === "shipments")
     const stockTransfers = included.filter((r) => r?.type === "stock_transfers")
     const shippingMethods = included.filter(
@@ -133,43 +139,31 @@ export default async function handler(
     )
 
     const debug = {
-      slug,
+      slug: (process.env.CL_SLUG || process.env.CL_ORGANIZATION || "").trim(),
       refreshOk: refresh.ok,
       refreshStatus: refresh.status,
-      refreshBodyPreview: refresh.ok
-        ? null
-        : (refresh.json ?? refresh.text.slice(0, 800)),
+      refreshBodyPreview: refresh.json ?? refresh.text.slice(0, 1200),
       orderFetchOk: order.ok,
       orderFetchStatus: order.status,
-      orderBodyPreview: order.ok
-        ? null
-        : (order.json ?? order.text.slice(0, 800)),
       shipmentsCount: shipments.length,
       stockTransfersCount: stockTransfers.length,
       shippingMethodsCount: shippingMethods.length,
     }
 
-    // If refresh failed, surface exactly why.
+    console.log("[orders/refresh] result", { orderId, ...debug })
+
     if (!refresh.ok) {
       return res.status(500).json({
         ok: false,
         error: "refresh_failed",
+        orderId,
         debug,
       })
     }
 
-    // If fetch failed, surface exactly why.
-    if (!order.ok) {
-      return res.status(500).json({
-        ok: false,
-        error: "order_fetch_failed",
-        debug,
-      })
-    }
-
-    return res.status(200).json({ ok: true, debug })
+    return res.status(200).json({ ok: true, orderId, debug })
   } catch (e: any) {
-    console.error("[refresh] server_error", e)
+    console.error("[orders/refresh] server_error", e)
     return res.status(500).json({
       ok: false,
       error: "server_error",
