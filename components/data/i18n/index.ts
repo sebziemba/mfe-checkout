@@ -12,51 +12,9 @@ import translationPT from "public/static/locales/pt/common.json"
 import translationSL from "public/static/locales/sl/common.json"
 import { initReactI18next } from "react-i18next"
 
-const languages = [
-  "en",
-  "it",
-  "de",
-  "pl",
-  "es",
-  "fr",
-  "hr",
-  "hu",
-  "pt",
-  "sl",
-  "nl",
-]
+const languages = ["nl"]
 
 const resources = {
-  en: {
-    translation: translationEN,
-  },
-  it: {
-    translation: translationIT,
-  },
-  de: {
-    translation: translationDE,
-  },
-  pl: {
-    translation: translationPL,
-  },
-  es: {
-    translation: translationES,
-  },
-  fr: {
-    translation: translationFR,
-  },
-  hr: {
-    translation: translationHR,
-  },
-  hu: {
-    translation: translationHU,
-  },
-  pt: {
-    translation: translationPT,
-  },
-  sl: {
-    translation: translationSL,
-  },
   nl: {
     translation: translationNL,
   },
