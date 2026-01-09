@@ -27,7 +27,6 @@ import { GTMProvider } from "components/data/GTMProvider"
 import { useActiveStep } from "components/hooks/useActiveStep"
 import { LayoutDefault } from "components/layouts/LayoutDefault"
 import { Accordion, AccordionItem } from "components/ui/Accordion"
-import { Footer } from "components/ui/Footer"
 import { Logo } from "components/ui/Logo"
 import { useRouter } from "next/router"
 import { useContext, useState } from "react"
@@ -147,7 +146,7 @@ const Checkout: React.FC<Props> = ({
               <Logo
                 logoUrl={logoUrl}
                 companyName={companyName}
-                className="hidden md:block"
+                className="hidden md:block w-50"
               />
               <div className="flex-1">
                 <OrderSummary
