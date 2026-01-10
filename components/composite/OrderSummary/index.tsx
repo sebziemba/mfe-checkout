@@ -290,10 +290,44 @@ export const OrderSummary: React.FC<Props> = ({
             <RecapLineItemTotal>
               {t("orderRecap.total_amount")}
             </RecapLineItemTotal>
-            <TotalAmount
-              data-testid="total-amount"
-              className="text-xl font-medium"
-            />
+
+            <TotalAmount data-testid="total-amount">
+              {(props) => {
+                // If CL already has final taxes (Stripe ran), use the real total
+                if (isTaxCalculated) {
+                  return (
+                    <span className="text-xl font-medium">{props.price}</span>
+                  )
+                }
+
+                // If prices are tax-included, no need to estimate anything
+                if (appCtx.taxIncluded) {
+                  return (
+                    <span className="text-xl font-medium">{props.price}</span>
+                  )
+                }
+
+                // Estimate VAT from subtotal snapshot (same as your VAT line)
+                const estimatedVatCents = Math.round(
+                  subtotalCentsSnapshot * NL_VAT_RATE,
+                )
+
+                // props.priceCents may be undefined during first render, so guard
+                const netTotalCents =
+                  typeof props.priceCents === "number" ? props.priceCents : 0
+
+                // Estimated gross total = net total + estimated VAT
+                const estimatedTotalCents = netTotalCents + estimatedVatCents
+                const estimatedTotalFormatted =
+                  formatMoneyFromCents(estimatedTotalCents)
+
+                return (
+                  <span className="text-xl font-medium">
+                    {estimatedTotalFormatted}
+                  </span>
+                )
+              }}
+            </TotalAmount>
           </RecapLineTotal>
 
           {!appCtx.isComplete && <ReturnToCart cartUrl={appCtx.cartUrl} />}
