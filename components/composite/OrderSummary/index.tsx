@@ -118,6 +118,7 @@ export const OrderSummary: React.FC<Props> = ({
                 type={type}
                 key={type}
                 hideItemCodes={hideItemCodes}
+                taxIncluded={appCtx.taxIncluded ?? undefined}
               />
             ))}
           </>

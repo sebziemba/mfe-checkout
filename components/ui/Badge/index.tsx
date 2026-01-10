@@ -15,7 +15,7 @@ export const Badge: React.FC<Props> = ({ status, stepNumber }) => (
       {
         "bg-primary": status === "edit",
         "bg-gray-400/50": status === "disabled" || status === "skip",
-        "bg-green-400": status === "done",
+        "bg-green-500": status === "done",
       },
     )}
   >

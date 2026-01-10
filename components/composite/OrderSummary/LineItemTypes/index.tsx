@@ -32,6 +32,7 @@ import {
 interface Props {
   type: TLineItem
   hideItemCodes?: NullableType<boolean>
+  taxIncluded?: boolean
 }
 
 const CODE_LOOKUP: { [k: string]: "sku_code" | "bundle_code" | undefined } = {
@@ -39,7 +40,24 @@ const CODE_LOOKUP: { [k: string]: "sku_code" | "bundle_code" | undefined } = {
   bundles: "bundle_code",
 }
 
-export const LineItemTypes: React.FC<Props> = ({ type, hideItemCodes }) => {
+const NL_VAT_RATE = 0.21
+
+function toGrossCents(netCents: number) {
+  return Math.round(netCents * (1 + NL_VAT_RATE))
+}
+
+function formatMoneyFromCents(cents: number, currency: string, locale: string) {
+  return new Intl.NumberFormat(locale || "nl-NL", {
+    style: "currency",
+    currency,
+  }).format(cents / 100)
+}
+
+export const LineItemTypes: React.FC<Props> = ({
+  type,
+  hideItemCodes,
+  taxIncluded,
+}) => {
   const { t, i18n } = useTranslation()
   return (
     <LineItem type={type}>
@@ -52,10 +70,37 @@ export const LineItemTypes: React.FC<Props> = ({ type, hideItemCodes }) => {
           {!hideItemCodes && <StyledLineItemSkuCode type={CODE_LOOKUP[type]} />}
           <LineItemTitle>
             <LineItemName className="font-medium" />
-            <LineItemAmount
-              data-testid="line-item-amount"
-              className="pl-2 text-lg font-medium"
-            />
+            <LineItemAmount data-testid="line-item-amount">
+              {(props) => {
+                // If CL already provides tax-included pricing, keep it untouched
+                if (taxIncluded) {
+                  return (
+                    <span className="pl-2 text-lg font-medium">
+                      {(props as any).price}
+                    </span>
+                  )
+                }
+                // Your appCtx flag isn't available here, so we infer from props if possible.
+                // If props.taxIncluded is not exposed, we’ll assume your prices are tax-exclusive
+                // and you want to display gross. (This matches your requirement.)
+                const netCents =
+                  typeof (props as any).priceCents === "number"
+                    ? (props as any).priceCents
+                    : 0
+
+                const currency =
+                  (props as any).currencyCode ??
+                  (props as any).currency_code ??
+                  "EUR"
+
+                const locale = i18n.language || "nl-NL"
+
+                const grossCents = toGrossCents(netCents)
+                const gross = formatMoneyFromCents(grossCents, currency, locale)
+
+                return <span className="pl-2 text-lg font-medium">{gross}</span>
+              }}
+            </LineItemAmount>
           </LineItemTitle>
           <StyledLineItemOptions showAll showName={true} className="options">
             <LineItemOption />

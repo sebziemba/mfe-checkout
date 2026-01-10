@@ -36,6 +36,7 @@ module.exports = {
       },
       green: {
         400: "#1FDA8A",
+        500: "#22C55E",
       },
       orange: {
         400: "#FFAB2E",
