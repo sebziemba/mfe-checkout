@@ -76,17 +76,18 @@ export const LineItemTypes: React.FC<Props> = ({
                 if (taxIncluded) {
                   return (
                     <span className="pl-2 text-lg font-medium">
-                      {(props as any).price}
+                      {(props as any).amount ?? (props as any).price}
                     </span>
                   )
                 }
-                // Your appCtx flag isn't available here, so we infer from props if possible.
-                // If props.taxIncluded is not exposed, we’ll assume your prices are tax-exclusive
-                // and you want to display gross. (This matches your requirement.)
+
+                // Use amountCents (line total) first — this is what LineItemAmount is about
                 const netCents =
-                  typeof (props as any).priceCents === "number"
-                    ? (props as any).priceCents
-                    : 0
+                  typeof (props as any).amountCents === "number"
+                    ? (props as any).amountCents
+                    : typeof (props as any).priceCents === "number"
+                      ? (props as any).priceCents
+                      : 0
 
                 const currency =
                   (props as any).currencyCode ??
