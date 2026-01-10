@@ -28,7 +28,7 @@
     "mustBeValidGiftCard": "Voer een geldige cadeaubon in"
   },
   "orderRecap": {
-    "order_summary": "Besteloverzicht",
+    "order_summary": "Bubbels van Frits",
     "cartContains": "Uw winkelwagen bevat {{count}} artikel",
     "cartContains_other": "Uw winkelwagen bevat {{count}} artikelen",
     "coupon_code": "Kortingscode",
