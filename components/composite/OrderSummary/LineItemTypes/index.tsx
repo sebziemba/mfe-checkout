@@ -1,3 +1,4 @@
+// components/composite/OrderSummary/LineItemTypes/index.tsx
 import { LineItemField } from "@commercelayer/react-components"
 import {
   LineItem,
@@ -53,12 +54,17 @@ function formatMoneyFromCents(cents: number, currency: string, locale: string) {
   }).format(cents / 100)
 }
 
+function isRecord(v: unknown): v is Record<string, any> {
+  return !!v && typeof v === "object" && !Array.isArray(v)
+}
+
 export const LineItemTypes: React.FC<Props> = ({
   type,
   hideItemCodes,
   taxIncluded,
 }) => {
   const { t, i18n } = useTranslation()
+
   return (
     <LineItem type={type}>
       <LineItemWrapper data-testid={`line-items-${type}`}>
@@ -68,6 +74,7 @@ export const LineItemTypes: React.FC<Props> = ({
         />
         <LineItemDescription>
           {!hideItemCodes && <StyledLineItemSkuCode type={CODE_LOOKUP[type]} />}
+
           <LineItemTitle>
             <LineItemName className="font-medium" />
 
@@ -107,9 +114,59 @@ export const LineItemTypes: React.FC<Props> = ({
               </LineItemField>
             )}
           </LineItemTitle>
+
           <StyledLineItemOptions showAll showName={true} className="options">
             <LineItemOption />
           </StyledLineItemOptions>
+
+          {/* ✅ NEW: show metadata from CL line item */}
+          <LineItemField attribute="metadata">
+            {({ attributeValue }: { attributeValue?: unknown }) => {
+              const md =
+                attributeValue &&
+                typeof attributeValue === "object" &&
+                !Array.isArray(attributeValue)
+                  ? (attributeValue as Record<string, any>)
+                  : null
+
+              const boxFor =
+                md && typeof md.box_for === "string" && md.box_for.trim()
+                  ? md.box_for.trim()
+                  : ""
+
+              const cardVariant =
+                md &&
+                typeof md.card_variant === "string" &&
+                md.card_variant.trim()
+                  ? md.card_variant.trim()
+                  : ""
+
+              const cardMessage =
+                md &&
+                typeof md.card_message === "string" &&
+                md.card_message.trim()
+                  ? md.card_message.trim()
+                  : ""
+
+              if (!boxFor && !cardVariant && !cardMessage) return <></>
+
+              return (
+                <div className="mt-1 text-[12px] text-gray-600 whitespace-pre-wrap">
+                  {boxFor ? <div>{boxFor}</div> : null}
+                  {cardVariant ? (
+                    <div>
+                      <span className="font-medium">Variant:</span>{" "}
+                      {cardVariant}
+                    </div>
+                  ) : null}
+                  {cardMessage ? (
+                    <div className="mt-1">{cardMessage}</div>
+                  ) : null}
+                </div>
+              )
+            }}
+          </LineItemField>
+
           <FlexContainer className="flex-col justify-between mt-2 lg:flex-row">
             <LineItemQty>
               <LineItemQuantity>
@@ -121,6 +178,7 @@ export const LineItemTypes: React.FC<Props> = ({
                 )}
               </LineItemQuantity>
             </LineItemQty>
+
             <LineItemField attribute="frequency">
               {/*  @ts-expect-error typing on attribute */}
               {({ attributeValue }) => {
