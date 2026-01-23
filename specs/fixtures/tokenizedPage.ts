@@ -435,7 +435,7 @@ const createAndPurchaseGiftCard = async (
 
 const getClient = (token: string) => {
   return CommerceLayer({
-    organization: process.env.NEXT_PUBLIC_SLUG as string,
+    organization: process.env.CL_ORGANIZATION as string,
     accessToken: token,
     domain: process.env.NEXT_PUBLIC_DOMAIN,
   })

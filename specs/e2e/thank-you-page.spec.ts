@@ -365,7 +365,7 @@ test.describe("with custom thankyou page url @organization-config and token", ()
       .replace(":lang", "it-IT")
       .replace(":order_id", checkoutPage.getOrderId() as string)
       .replace(":token", checkoutPage.getOrderToken() as string)
-      .replace(":slug", process.env.NEXT_PUBLIC_SLUG as string)
+      .replace(":slug", process.env.CL_ORGANIZATION as string)
 
     await checkoutPage.page.waitForURL(thankyouPageReplaced, {
       timeout: 10000,

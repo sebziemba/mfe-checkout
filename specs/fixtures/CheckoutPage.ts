@@ -46,8 +46,8 @@ export class CheckoutPage {
           id: "organization-id",
           type: "organizations",
           attributes: {
-            name: process.env.NEXT_PUBLIC_SLUG as string,
-            slug: process.env.NEXT_PUBLIC_SLUG as string,
+            name: process.env.CL_ORGANIZATION as string,
+            slug: process.env.CL_ORGANIZATION as string,
             domain: null,
             support_phone: "",
             support_email: "",
@@ -870,18 +870,18 @@ export class CheckoutPage {
         if (await pickPlan.isVisible()) {
           await pickPlan.click()
         }
-        let confirmAndPay = klarnaIframe.getByTestId("confirm-and-pay")
+        const confirmAndPay = klarnaIframe.getByTestId("confirm-and-pay")
         await this.page.waitForTimeout(4000)
 
         if (await confirmAndPay.isVisible()) {
-          await confirmAndPay.click({force: true })
+          await confirmAndPay.click({ force: true })
         }
 
         klarnaIframe.getByTestId("confirm-and-pay")
         await this.page.waitForTimeout(4000)
 
         if (await confirmAndPay.isVisible()) {
-          await confirmAndPay.click({force: true })
+          await confirmAndPay.click({ force: true })
         }
 
         const button = klarnaIframe.getByRole("button", { name: "Continue" })
