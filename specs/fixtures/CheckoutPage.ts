@@ -4,7 +4,7 @@ import { expect, type Page } from "@playwright/test"
 
 import type { EcommerceProps } from "../../components/data/GTMProvider/typings"
 import { composeForCheck, euAddress, euAddress2 } from "../utils/addresses"
-import { getSuperClfient } from "./tokenizedPage"
+import { getSuperClient } from "./tokenizedPage"
 
 interface GoToProps {
   orderId: string
