@@ -4,7 +4,7 @@ import { expect, type Page } from "@playwright/test"
 
 import type { EcommerceProps } from "../../components/data/GTMProvider/typings"
 import { composeForCheck, euAddress, euAddress2 } from "../utils/addresses"
-import { getSuperClient } from "./tokenizedPage"
+import { getSuperClfient } from "./tokenizedPage"
 
 interface GoToProps {
   orderId: string
@@ -46,8 +46,8 @@ export class CheckoutPage {
           id: "organization-id",
           type: "organizations",
           attributes: {
-            name: process.env.CL_ORGANIZATION as string,
-            slug: process.env.CL_ORGANIZATION as string,
+            name: process.env.NEXT_PUBLIC_SLUG as string,
+            slug: process.env.NEXT_PUBLIC_SLUG as string,
             domain: null,
             support_phone: "",
             support_email: "",
