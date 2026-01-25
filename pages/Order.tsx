@@ -21,7 +21,26 @@ const DynamicCheckout = dynamic(() => import("components/composite/Checkout"), {
 CheckoutSkeleton.displayName = "Skeleton Loader"
 
 const Order: NextPage = () => {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search)
+    console.log("[checkout] url", {
+      pathname: window.location.pathname,
+      orderIdFromPath: window.location.pathname
+        .split("/")
+        .filter(Boolean)
+        .pop(),
+      accessTokenPresent: params.has("accessToken"),
+      accessTokenLength: params.get("accessToken")?.length,
+    })
+  }
+
   const { settings, retryOnError, isLoading } = useSettingsOrInvalid()
+
+  console.log("[checkout] settings_state", {
+    isLoading,
+    hasSettings: Boolean(settings),
+    retryOnError,
+  })
 
   if (isLoading || (!settings && !retryOnError)) return <CheckoutSkeleton />
 
