@@ -68,14 +68,21 @@ export const OrderSummary: React.FC<Props> = ({
     !appCtx.taxIncluded && taxesCentsRef.current === 0
 
   const getEstimatedVatCents = () => {
-    // taxable base: subtotal - discount + adjustments
+    // CL discounts are usually negative (e.g. -500), but normalize so it always reduces the base
+    const discountNormalized =
+      discountCentsRef.current > 0
+        ? -discountCentsRef.current
+        : discountCentsRef.current
+
+    // taxable base: subtotal + discount + adjustments
     // (shipping excluded by design, matching your rule)
     const taxableBase = Math.max(
-      subtotalCentsRef.current -
-        discountCentsRef.current +
+      subtotalCentsRef.current +
+        discountNormalized +
         adjustmentCentsRef.current,
       0,
     )
+
     return Math.round(taxableBase * NL_VAT_RATE)
   }
 
