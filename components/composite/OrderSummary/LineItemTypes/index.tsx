@@ -155,7 +155,7 @@ export const LineItemTypes: React.FC<Props> = ({
                   {boxFor ? <div>{boxFor}</div> : null}
                   {cardVariant ? (
                     <div>
-                      <span className="font-medium">Variant:</span>{" "}
+                      <span className="font-medium">Gekozen variant:</span>{" "}
                       {cardVariant}
                     </div>
                   ) : null}
