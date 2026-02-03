@@ -151,7 +151,7 @@ export const LineItemTypes: React.FC<Props> = ({
               if (!boxFor && !cardVariant && !cardMessage) return <></>
 
               return (
-                <div className="mt-1 text-[12px] text-gray-600 whitespace-pre-wrap">
+                <div className="mt-0.5 mb-1 text-[12px] text-gray-600 whitespace-pre-wrap">
                   {boxFor ? <div>{boxFor}</div> : null}
                   {cardVariant ? (
                     <div>
