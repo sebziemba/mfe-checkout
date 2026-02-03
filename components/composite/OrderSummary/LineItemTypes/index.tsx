@@ -160,7 +160,7 @@ export const LineItemTypes: React.FC<Props> = ({
                     </div>
                   ) : null}
                   {cardMessage ? (
-                    <div className="mt-1">{cardMessage}</div>
+                    <div className="mt-1.5">{cardMessage}</div>
                   ) : null}
                 </div>
               )
